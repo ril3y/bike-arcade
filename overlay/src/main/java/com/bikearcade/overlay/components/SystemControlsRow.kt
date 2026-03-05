@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -34,6 +35,7 @@ fun SystemControlsRow(
     isHudVisible: Boolean,
     onToggleHud: (Boolean) -> Unit,
     onOpenSettings: () -> Unit,
+    onExitGame: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -75,13 +77,26 @@ fun SystemControlsRow(
             )
         }
 
-        // Settings button
-        ArcadeIconButton(
-            icon = Icons.Default.Settings,
-            contentDescription = "Settings",
-            onClick = onOpenSettings,
-            iconTint = SettingsGear,
-            backgroundColor = SurfaceBright,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Exit game button
+            ArcadeIconButton(
+                icon = Icons.Default.ExitToApp,
+                contentDescription = "Exit Game",
+                onClick = onExitGame,
+                iconTint = com.bikearcade.ui.theme.HeartRateRed,
+                backgroundColor = SurfaceBright,
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            // Settings button
+            ArcadeIconButton(
+                icon = Icons.Default.Settings,
+                contentDescription = "Settings",
+                onClick = onOpenSettings,
+                iconTint = SettingsGear,
+                backgroundColor = SurfaceBright,
+            )
+        }
     }
 }

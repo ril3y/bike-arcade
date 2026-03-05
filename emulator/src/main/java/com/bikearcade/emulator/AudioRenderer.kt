@@ -28,9 +28,9 @@ class AudioRenderer {
     @Volatile
     private var started = false
 
-    fun start(requestedSampleRate: Int = 44100) {
+    fun start(requestedSampleRate: Int = 0) {
         if (started) return
-        sampleRate = requestedSampleRate
+        if (requestedSampleRate > 0) sampleRate = requestedSampleRate
 
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate, CHANNEL_CONFIG, AUDIO_FORMAT

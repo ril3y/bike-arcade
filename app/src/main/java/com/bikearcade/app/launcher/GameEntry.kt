@@ -14,7 +14,8 @@ data class GameEntry(
     val path: String,
     val consoleType: ConsoleType,
     val lastPlayed: Long = 0L,
-    val fileSize: Long = 0L
+    val fileSize: Long = 0L,
+    val artworkPath: String? = null,
 )
 
 /**

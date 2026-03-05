@@ -55,6 +55,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -92,9 +95,10 @@ fun GameLauncherScreen(
     var searchQuery by remember { mutableStateOf("") }
     var consoleFilter by remember { mutableStateOf<ConsoleType?>(null) }
 
-    // Trigger initial scan
+    // Trigger initial scan and thumbnail fetch
     LaunchedEffect(Unit) {
         gameLibrary.scan()
+        gameLibrary.fetchMissingThumbnails()
     }
 
     val filteredGames by remember(games, searchQuery, consoleFilter) {
@@ -347,7 +351,7 @@ private fun GameCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(180.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -357,10 +361,28 @@ private fun GameCard(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradientBrush)
-                .padding(16.dp)
         ) {
+            // Thumbnail background
+            if (entry.artworkPath != null) {
+                val platform = androidx.compose.ui.platform.LocalContext.current
+                AsyncImage(
+                    model = ImageRequest.Builder(platform)
+                        .data(File(entry.artworkPath))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)),
+                    alpha = 0.35f,
+                )
+            }
+
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Console badge

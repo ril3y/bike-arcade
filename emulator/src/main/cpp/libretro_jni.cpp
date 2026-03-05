@@ -92,6 +92,8 @@ typedef bool (*retro_load_game_t)(const struct retro_game_info*);
 typedef void (*retro_unload_game_t)(void);
 typedef void (*retro_run_t)(void);
 typedef void (*retro_reset_t)(void);
+typedef void* (*retro_get_memory_data_t)(unsigned);
+typedef size_t (*retro_get_memory_size_t)(unsigned);
 
 // ── Global state ────────────────────────────────────────────────────────
 
@@ -112,6 +114,8 @@ static retro_load_game_t             p_retro_load_game             = nullptr;
 static retro_unload_game_t           p_retro_unload_game           = nullptr;
 static retro_run_t                   p_retro_run                   = nullptr;
 static retro_reset_t                 p_retro_reset                 = nullptr;
+static retro_get_memory_data_t       p_retro_get_memory_data       = nullptr;
+static retro_get_memory_size_t       p_retro_get_memory_size       = nullptr;
 
 static JavaVM       *g_jvm = nullptr;
 static jobject       g_bridge_obj = nullptr;   // Global ref to LibretroBridge companion
@@ -470,6 +474,8 @@ Java_com_bikearcade_emulator_LibretroBridge_nativeLoadCore(
     LOAD_SYM(g_core_handle, retro_unload_game);
     LOAD_SYM(g_core_handle, retro_run);
     LOAD_SYM(g_core_handle, retro_reset);
+    LOAD_SYM(g_core_handle, retro_get_memory_data);
+    LOAD_SYM(g_core_handle, retro_get_memory_size);
 
     // Minimum required symbols
     if (!p_retro_init || !p_retro_deinit || !p_retro_run ||
@@ -510,6 +516,8 @@ Java_com_bikearcade_emulator_LibretroBridge_nativeUnloadCore(
     p_retro_unload_game = nullptr;
     p_retro_run = nullptr;
     p_retro_reset = nullptr;
+    p_retro_get_memory_data = nullptr;
+    p_retro_get_memory_size = nullptr;
 
     g_pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 }
@@ -738,6 +746,48 @@ Java_com_bikearcade_emulator_LibretroBridge_retroSetInputState(
     JNIEnv * /*env*/, jobject /* this */)
 {
     if (p_retro_set_input_state) p_retro_set_input_state(cb_input_state);
+}
+
+// --- retroGetMemoryData ---
+// Returns the SRAM (save RAM) contents as a byte array, or null if unavailable.
+// RETRO_MEMORY_SAVE_RAM = 0
+JNIEXPORT jbyteArray JNICALL
+Java_com_bikearcade_emulator_LibretroBridge_retroGetMemoryData(
+    JNIEnv *env, jobject /* this */, jint memoryId)
+{
+    if (!p_retro_get_memory_data || !p_retro_get_memory_size) return nullptr;
+
+    size_t size = p_retro_get_memory_size(static_cast<unsigned>(memoryId));
+    void *data = p_retro_get_memory_data(static_cast<unsigned>(memoryId));
+
+    if (!data || size == 0) return nullptr;
+
+    jbyteArray arr = env->NewByteArray(static_cast<jint>(size));
+    if (arr) {
+        env->SetByteArrayRegion(arr, 0, static_cast<jint>(size),
+                                reinterpret_cast<const jbyte*>(data));
+    }
+    return arr;
+}
+
+// --- retroSetMemoryData ---
+// Writes data into the core's SRAM buffer (e.g., to restore a save).
+JNIEXPORT jboolean JNICALL
+Java_com_bikearcade_emulator_LibretroBridge_retroSetMemoryData(
+    JNIEnv *env, jobject /* this */, jint memoryId, jbyteArray data)
+{
+    if (!p_retro_get_memory_data || !p_retro_get_memory_size || !data) return JNI_FALSE;
+
+    size_t size = p_retro_get_memory_size(static_cast<unsigned>(memoryId));
+    void *ptr = p_retro_get_memory_data(static_cast<unsigned>(memoryId));
+
+    if (!ptr || size == 0) return JNI_FALSE;
+
+    jsize dataLen = env->GetArrayLength(data);
+    if (static_cast<size_t>(dataLen) > size) dataLen = static_cast<jsize>(size);
+
+    env->GetByteArrayRegion(data, 0, dataLen, reinterpret_cast<jbyte*>(ptr));
+    return JNI_TRUE;
 }
 
 } // extern "C"

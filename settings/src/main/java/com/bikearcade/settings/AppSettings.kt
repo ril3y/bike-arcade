@@ -25,8 +25,8 @@ data class AppSettings(
         const val DEFAULT_SIDEBAR_WIDTH = 640
         const val DEFAULT_HUD_OPACITY = 0.85f
         const val DEFAULT_USE_METRIC = true
-        val DEFAULT_METRICS_SOURCE = MetricsSourceType.BLE
-        const val DEFAULT_TCP_PORT = 9999
+        val DEFAULT_METRICS_SOURCE = MetricsSourceType.TCP
+        const val DEFAULT_TCP_PORT = 9998
         const val DEFAULT_SMOOTHING_ALPHA = 0.3f
 
         // Range constraints

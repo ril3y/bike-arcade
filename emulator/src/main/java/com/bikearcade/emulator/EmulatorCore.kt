@@ -26,6 +26,13 @@ class EmulatorCore(private val context: Context) {
         File(context.filesDir, "cores").also { it.mkdirs() }
     }
 
+    private val savesDir: File by lazy {
+        File("/storage/emulated/0/BikeArcade/saves").also { it.mkdirs() }
+    }
+
+    /** The ROM path of the currently loaded game, used to derive the save file name. */
+    private var currentRomPath: String? = null
+
     // ── State ───────────────────────────────────────────────────────────
 
     enum class State { IDLE, CORE_LOADED, GAME_LOADED }
@@ -184,8 +191,12 @@ class EmulatorCore(private val context: Context) {
         coreSampleRate = if (avInfo[1] > 0) avInfo[1] else 44100.0
         Log.i(TAG, "AV info: fps=$coreFps, sampleRate=$coreSampleRate")
 
+        currentRomPath = actualPath
         state = State.GAME_LOADED
         Log.i(TAG, "Game loaded successfully")
+
+        // Load SRAM save data if it exists
+        loadSram()
     }
 
     private val romExtensions = setOf("nes", "smc", "sfc")
@@ -246,6 +257,7 @@ class EmulatorCore(private val context: Context) {
         when (state) {
             State.GAME_LOADED -> {
                 Log.i(TAG, "Unloading game")
+                saveSram()
                 LibretroBridge.retroUnloadGame()
                 LibretroBridge.retroDeinit()
                 LibretroBridge.nativeUnloadCore()
@@ -263,6 +275,50 @@ class EmulatorCore(private val context: Context) {
                 Log.d(TAG, "Already idle; nothing to unload")
             }
         }
+    }
+
+    /**
+     * Save the core's SRAM to disk. Called automatically when unloading a game.
+     */
+    fun saveSram() {
+        val romPath = currentRomPath ?: return
+        try {
+            val sramData = LibretroBridge.retroGetMemoryData(LibretroBridge.MEMORY_SAVE_RAM)
+            if (sramData == null || sramData.isEmpty()) {
+                Log.d(TAG, "No SRAM data to save")
+                return
+            }
+            val saveFile = sramFileFor(romPath)
+            saveFile.parentFile?.mkdirs()
+            saveFile.writeBytes(sramData)
+            Log.i(TAG, "Saved SRAM: ${saveFile.name} (${sramData.size} bytes)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save SRAM", e)
+        }
+    }
+
+    private fun loadSram() {
+        val romPath = currentRomPath ?: return
+        val saveFile = sramFileFor(romPath)
+        if (!saveFile.exists()) {
+            Log.d(TAG, "No SRAM save file found: ${saveFile.name}")
+            return
+        }
+        try {
+            val sramData = saveFile.readBytes()
+            if (LibretroBridge.retroSetMemoryData(LibretroBridge.MEMORY_SAVE_RAM, sramData)) {
+                Log.i(TAG, "Loaded SRAM: ${saveFile.name} (${sramData.size} bytes)")
+            } else {
+                Log.w(TAG, "Core rejected SRAM data")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load SRAM", e)
+        }
+    }
+
+    private fun sramFileFor(romPath: String): File {
+        val romName = File(romPath).nameWithoutExtension
+        return File(savesDir, "$romName.srm")
     }
 
     private fun clearCallbacks() {

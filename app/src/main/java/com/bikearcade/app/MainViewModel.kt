@@ -104,26 +104,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Start media session monitoring
         container.mediaSessionMonitor.startListening()
 
-        // Connect to bike metrics — try configured source, fallback to the other
+        // Connect to bike metrics — ensure serial bridge chain is running,
+        // then try configured port, then fallback port
         viewModelScope.launch {
             val settings = container.settingsRepository.settings.value
+
+            // Force-stop JRNY to release the single-client serial bridge (TCP:9999)
+            releaseSerialBridge()
+
+            // Ensure nautiluslauncher is running (provides TCP:9999 serial bridge)
+            ensureSerialBridgeRunning()
+
             val primary = when (settings.metricsSource) {
                 MetricsSourceType.BLE -> BikeMetricsService.SourceType.BLE_FTMS
                 MetricsSourceType.TCP -> BikeMetricsService.SourceType.TCP_SERIAL
             }
-            val fallback = when (primary) {
-                BikeMetricsService.SourceType.BLE_FTMS -> BikeMetricsService.SourceType.TCP_SERIAL
-                BikeMetricsService.SourceType.TCP_SERIAL -> BikeMetricsService.SourceType.BLE_FTMS
-            }
 
-            try {
-                container.bikeMetricsService.connect(primary, tcpPort = settings.tcpPort)
-            } catch (e: Exception) {
-                android.util.Log.w("MainViewModel", "Primary metrics ($primary) failed, trying fallback ($fallback)", e)
+            if (primary == BikeMetricsService.SourceType.TCP_SERIAL) {
+                // Try configured port first, then the other serial port
+                val ports = if (settings.tcpPort == 9998) intArrayOf(9998, 9999) else intArrayOf(9999, 9998)
+                var connected = false
+                for (port in ports) {
+                    try {
+                        container.bikeMetricsService.connect(primary, tcpPort = port)
+                        android.util.Log.i("MainViewModel", "Connected to serial bridge on port $port")
+                        connected = true
+                        break
+                    } catch (e: Exception) {
+                        android.util.Log.w("MainViewModel", "TCP port $port failed: ${e.message}")
+                    }
+                }
+                if (!connected) {
+                    // Try BLE as last resort
+                    try {
+                        container.bikeMetricsService.connect(BikeMetricsService.SourceType.BLE_FTMS)
+                    } catch (e: Exception) {
+                        android.util.Log.w("MainViewModel", "BLE fallback also failed: ${e.message}")
+                    }
+                }
+            } else {
                 try {
-                    container.bikeMetricsService.connect(fallback, tcpPort = settings.tcpPort)
-                } catch (e2: Exception) {
-                    android.util.Log.w("MainViewModel", "Fallback metrics ($fallback) also failed", e2)
+                    container.bikeMetricsService.connect(primary)
+                } catch (e: Exception) {
+                    android.util.Log.w("MainViewModel", "BLE failed, trying TCP", e)
+                    try {
+                        container.bikeMetricsService.connect(BikeMetricsService.SourceType.TCP_SERIAL, tcpPort = settings.tcpPort)
+                    } catch (e2: Exception) {
+                        android.util.Log.w("MainViewModel", "TCP fallback also failed: ${e2.message}")
+                    }
                 }
             }
         }
@@ -179,11 +207,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun pauseEmulation() {
         emulatorThread?.pause()
         container.audioRenderer.stop()
+        // Save SRAM on pause in case the process is killed while backgrounded
+        container.emulatorCore.saveSram()
     }
 
     fun resumeEmulation() {
         if (emulatorThread?.isPaused == true) {
             container.audioRenderer.start()
+            container.audioRenderer.flush()
             emulatorThread?.resume()
         }
     }
@@ -198,6 +229,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleHud(visible: Boolean) {
         _isHudVisible.value = visible
+    }
+
+    /**
+     * Ensure nautiluslauncher is running so its SerialPortServer (TCP:9999) is available.
+     * Also start the serialbridge proxy (TCP:9998) if installed.
+     */
+    private fun ensureSerialBridgeRunning() {
+        try {
+            val ctx = getApplication<BikeArcadeApplication>()
+            // Launch nautiluslauncher to un-stop it and trigger SerialPortService
+            val launcherIntent = ctx.packageManager.getLaunchIntentForPackage("com.nautilus.nautiluslauncher")
+            if (launcherIntent != null) {
+                launcherIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(launcherIntent)
+                android.util.Log.i("MainViewModel", "Started nautiluslauncher for serial bridge")
+            }
+            // Start serialbridge proxy if available
+            try {
+                val bridgeIntent = android.content.Intent()
+                bridgeIntent.setClassName("com.bowflex.serialbridge", "com.bowflex.serialbridge.MainActivity")
+                bridgeIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(bridgeIntent)
+                android.util.Log.i("MainViewModel", "Started serialbridge proxy")
+            } catch (_: Exception) { }
+            // Give services time to start
+            Thread.sleep(2000)
+        } catch (e: Exception) {
+            android.util.Log.w("MainViewModel", "Could not ensure serial bridge: ${e.message}")
+        }
+    }
+
+    /**
+     * Force-stop JRNY app to release the single-client serial bridge on TCP:9999.
+     * The nautiluslauncher's SerialPortServer only accepts one client at a time.
+     * JRNY (com.nautilus.bowflex.usb) holds this connection during workouts.
+     */
+    private fun releaseSerialBridge() {
+        try {
+            val am = getApplication<BikeArcadeApplication>()
+                .getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            // Force-stop JRNY variants that may hold the serial bridge connection
+            am.killBackgroundProcesses("com.nautilus.bowflex.usb")
+            am.killBackgroundProcesses("com.nautilus.bowflex")
+            android.util.Log.i("MainViewModel", "Killed JRNY background processes to release serial bridge")
+        } catch (e: Exception) {
+            android.util.Log.w("MainViewModel", "Could not kill JRNY processes: ${e.message}")
+        }
     }
 
     // Media controls

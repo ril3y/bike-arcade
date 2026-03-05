@@ -55,6 +55,7 @@ fun SidebarOverlay(
     onSkipPrevious: () -> Unit,
     onToggleHud: (Boolean) -> Unit,
     onOpenSettings: () -> Unit,
+    onExitGame: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -102,6 +103,7 @@ fun SidebarOverlay(
             isHudVisible = isHudVisible,
             onToggleHud = onToggleHud,
             onOpenSettings = onOpenSettings,
+            onExitGame = onExitGame,
         )
 
         Spacer(Modifier.height(8.dp))

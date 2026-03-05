@@ -67,6 +67,17 @@ object LibretroBridge {
     /** retro_reset() - soft-reset the loaded game. */
     external fun retroReset()
 
+    // ── Memory (SRAM) ────────────────────────────────────────────────────
+
+    /** RETRO_MEMORY_SAVE_RAM */
+    const val MEMORY_SAVE_RAM = 0
+
+    /** Read the core's SRAM as a byte array. Returns null if unavailable. */
+    external fun retroGetMemoryData(memoryId: Int): ByteArray?
+
+    /** Write data into the core's SRAM buffer. Returns true on success. */
+    external fun retroSetMemoryData(memoryId: Int, data: ByteArray): Boolean
+
     // ── Callback registration ───────────────────────────────────────────
 
     /**

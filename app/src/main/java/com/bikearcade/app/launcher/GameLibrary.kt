@@ -17,7 +17,7 @@ import java.util.zip.ZipFile
  * ROM directory: /storage/emulated/0/BikeArcade/roms/
  * Supported formats: .nes, .smc, .sfc, .zip (containing supported ROMs)
  */
-class GameLibrary(context: Context) {
+class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManager? = null) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -49,12 +49,35 @@ class GameLibrary(context: Context) {
                     ?: emptyList()
             }
 
-            _games.value = entries.sortedWith(
+            // Attach cached thumbnails
+            val entriesWithArt = entries.map { entry ->
+                val cached = thumbnailManager?.getCachedThumbnail(entry)
+                if (cached != null) entry.copy(artworkPath = cached.absolutePath) else entry
+            }
+
+            _games.value = entriesWithArt.sortedWith(
                 compareByDescending<GameEntry> { it.lastPlayed }
                     .thenBy { it.name.lowercase() }
             )
         } finally {
             _isScanning.value = false
+        }
+    }
+
+    /**
+     * Download missing thumbnails in the background and update entries as they arrive.
+     */
+    suspend fun fetchMissingThumbnails() {
+        val tm = thumbnailManager ?: return
+        val current = _games.value
+        for (entry in current) {
+            if (entry.artworkPath != null) continue
+            val file = tm.fetchThumbnail(entry)
+            if (file != null) {
+                _games.value = _games.value.map { g ->
+                    if (g.path == entry.path) g.copy(artworkPath = file.absolutePath) else g
+                }
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package com.bikearcade.app
 import android.app.Application
 import android.content.Context
 import com.bikearcade.app.launcher.GameLibrary
+import com.bikearcade.app.launcher.ThumbnailManager
 import com.bikearcade.emulator.AudioRenderer
 import com.bikearcade.emulator.EmulatorCore
 import com.bikearcade.emulator.InputManager
@@ -30,7 +31,8 @@ class BikeArcadeApplication : Application() {
 
 class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(context)
-    val gameLibrary = GameLibrary(context)
+    val thumbnailManager = ThumbnailManager(context)
+    val gameLibrary = GameLibrary(context, thumbnailManager)
     val bikeMetricsService = BikeMetricsService(context)
     val mediaSessionMonitor = MediaSessionMonitor(context)
     val mediaController = BikeArcadeMediaController(context)
