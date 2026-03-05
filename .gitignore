@@ -1,0 +1,45 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+cores/
+
+# Build outputs
+**/build/
+.cxx/
+
+# ROMs
+*.zip
+*.nes
+*.smc
+*.sfc
+*.rom
+
+# Screenshots
+screen.png
+screenshot*.png
