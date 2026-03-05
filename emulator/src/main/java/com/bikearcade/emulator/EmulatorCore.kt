@@ -316,6 +316,85 @@ class EmulatorCore(private val context: Context) {
         }
     }
 
+    // ── Save states ──────────────────────────────────────────────────────
+
+    private val statesDir: File by lazy {
+        File("/storage/emulated/0/BikeArcade/states").also { it.mkdirs() }
+    }
+
+    /**
+     * Save an emulator snapshot (save state) to slot [slot].
+     * Returns true on success.
+     */
+    fun saveState(slot: Int = 0): Boolean {
+        val romPath = currentRomPath ?: run {
+            Log.w(TAG, "saveState: no ROM loaded")
+            return false
+        }
+        if (state != State.GAME_LOADED) {
+            Log.w(TAG, "saveState: wrong state $state")
+            return false
+        }
+        return try {
+            val data = LibretroBridge.retroSerialize()
+            if (data == null || data.isEmpty()) {
+                Log.w(TAG, "Serialize returned empty/null data")
+                return false
+            }
+            val file = stateFileFor(romPath, slot)
+            file.parentFile?.mkdirs()
+            // Delete existing file first to ensure clean overwrite
+            if (file.exists()) file.delete()
+            file.writeBytes(data)
+            Log.i(TAG, "Saved state slot $slot: ${file.name} (${data.size} bytes)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save state slot $slot", e)
+            false
+        }
+    }
+
+    /**
+     * Load an emulator snapshot (save state) from slot [slot].
+     * Returns true on success.
+     */
+    fun loadState(slot: Int = 0): Boolean {
+        val romPath = currentRomPath ?: return false
+        check(state == State.GAME_LOADED) { "No game loaded; cannot load state." }
+        val file = stateFileFor(romPath, slot)
+        if (!file.exists()) {
+            Log.d(TAG, "No save state in slot $slot: ${file.name}")
+            return false
+        }
+        return try {
+            val data = file.readBytes()
+            if (LibretroBridge.retroUnserialize(data)) {
+                Log.i(TAG, "Loaded state slot $slot: ${file.name} (${data.size} bytes)")
+                true
+            } else {
+                Log.w(TAG, "Core rejected state data from slot $slot")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load state", e)
+            false
+        }
+    }
+
+    /**
+     * Check if a save state exists for the given slot.
+     */
+    fun hasStateFile(slot: Int = 0): Boolean {
+        val romPath = currentRomPath ?: return false
+        return stateFileFor(romPath, slot).exists()
+    }
+
+    private fun stateFileFor(romPath: String, slot: Int): File {
+        val romName = File(romPath).nameWithoutExtension
+        val suffix = if (slot == 0) ".state" else ".state$slot"
+        return File(statesDir, "$romName$suffix")
+    }
+
     private fun sramFileFor(romPath: String): File {
         val romName = File(romPath).nameWithoutExtension
         return File(savesDir, "$romName.srm")

@@ -78,6 +78,14 @@ object LibretroBridge {
     /** Write data into the core's SRAM buffer. Returns true on success. */
     external fun retroSetMemoryData(memoryId: Int, data: ByteArray): Boolean
 
+    // ── Save states (serialize/unserialize) ────────────────────────────────
+
+    /** Serialize the entire emulator state to a byte array. Returns null on failure. */
+    external fun retroSerialize(): ByteArray?
+
+    /** Restore emulator state from a byte array. Returns true on success. */
+    external fun retroUnserialize(data: ByteArray): Boolean
+
     // ── Callback registration ───────────────────────────────────────────
 
     /**

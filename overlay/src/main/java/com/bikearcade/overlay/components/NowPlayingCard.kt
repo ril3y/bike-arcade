@@ -29,7 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.bikearcade.overlay.MediaInfo
+import com.bikearcade.media.MediaInfo
 import com.bikearcade.ui.components.ArcadeIconButton
 import com.bikearcade.ui.components.ArcadeIconButtonLarge
 import com.bikearcade.ui.theme.MediaActive
@@ -115,7 +115,7 @@ fun NowPlayingCard(
                 Spacer(Modifier.height(2.dp))
 
                 Text(
-                    text = mediaInfo.artist.ifBlank { "Unknown artist" },
+                    text = mediaInfo.artistName.ifBlank { "Unknown artist" },
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     maxLines = 1,

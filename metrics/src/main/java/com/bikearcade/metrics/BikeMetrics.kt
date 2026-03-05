@@ -16,6 +16,8 @@ data class BikeMetrics(
     val cadence: Double = 0.0,
     val power: Int = 0,
     val speed: Double = 0.0,
+    val resistance: Int = 0,
+    val incline: Double = 0.0,
     val distance: Double = 0.0,
     val elapsedTime: Long = 0L,
     val timestamp: Long = System.currentTimeMillis()
@@ -27,6 +29,8 @@ data class BikeMetrics(
             cadence = 0.0,
             power = 0,
             speed = 0.0,
+            resistance = 0,
+            incline = 0.0,
             distance = 0.0,
             elapsedTime = 0L,
             timestamp = 0L

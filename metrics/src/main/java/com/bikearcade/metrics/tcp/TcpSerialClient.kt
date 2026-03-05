@@ -309,49 +309,79 @@ class TcpSerialClient(
      * NOTE: These offsets will be validated against live captured data.
      * The parser logs raw bytes so we can adjust field mapping.
      */
+    /**
+     * Parse the 23-byte sensor payload from the Bowflex C9C10StreamData.
+     *
+     * Known field mapping (from idle/pedaling analysis):
+     *   Byte  3:     resistance level (0-100)
+     *   Byte  7:     cadence-related (changes with pedaling)
+     *   Byte 10:     flags (0x08 normal, 0x0A sometimes)
+     *   Bytes 4-5:   speed (uint16 LE, raw units TBD)
+     *   Bytes 8-9:   power (uint16 LE, raw units TBD)
+     *   Bytes 20-21: unknown (0xEF44 idle, changes with pedaling)
+     *
+     * This mapping is still being refined. All values log verbosely so
+     * we can correct field offsets from captured pedaling data.
+     */
     private fun parseSensorData(data: ByteArray): BikeMetrics? {
-        if (data.size < 16) {
+        if (data.size < 20) {
             Log.w(TAG, "Sensor payload too short: ${data.size} bytes")
             return null
         }
 
         try {
-            // Try decoding with assumed layout
-            val cadenceRaw = decodeUint16(data, 0)
-            val speedRaw = decodeUint16(data, 2)
-            val powerRaw = decodeUint16(data, 4)
-            val heartRate = data[6].toInt() and 0xFF
-            val resistanceLevel = if (data.size > 7) data[7].toInt() and 0xFF else 0
+            // Resistance is well-established at byte 3
+            val resistance = data[3].toInt() and 0xFF
 
-            // Distance and elapsed time (uint32 if we have enough bytes)
-            val distanceRaw = if (data.size >= 12) decodeUint32(data, 8) else 0L
-            val elapsedRaw = if (data.size >= 16) decodeUint32(data, 12) else 0L
+            // Cadence: byte 7 appears to change with pedaling
+            // Could be raw RPM or RPM * 2
+            val cadenceRaw = data[7].toInt() and 0xFF
 
-            // Calories and tilt if available
-            val caloriesRaw = if (data.size >= 18) decodeUint16(data, 16) else 0
-            val tilt = if (data.size >= 20) decodeInt16(data, 18) else 0
+            // Speed: try uint16 LE at bytes 4-5
+            val speedRaw = decodeUint16(data, 4)
 
-            // Cadence: likely RPM * 2 (FTMS standard) or raw RPM
-            // Speed: likely KPH * 100 or MPH * 100
-            // We'll use RPM/2 for cadence and KPH/100 for speed as common FTMS encoding
-            val cadenceRpm = cadenceRaw / 2.0
+            // Power: try uint16 LE at bytes 8-9
+            val powerRaw = decodeUint16(data, 8)
+
+            // Incline/lean: int16 LE at bytes 18-19 (signed, degrees * 10?)
+            val inclineRaw = if (data.size >= 20) decodeInt16(data, 18) else 0
+
+            // Bytes 20-21: another uint16 that changes with activity
+            val field2021 = if (data.size >= 22) decodeUint16(data, 20) else 0
+
+            // Verbose logging to map remaining fields while pedaling
+            if (frameCount <= 10 || frameCount % 50 == 0L) {
+                val dump = buildString {
+                    append("Parsed: res=$resistance cadRaw=$cadenceRaw ")
+                    append("spd16=${speedRaw} pwr16=${powerRaw} ")
+                    append("f2021=$field2021 ")
+                    // Dump each byte individually for analysis
+                    append("bytes=[")
+                    for (i in data.indices) {
+                        if (i > 0) append(",")
+                        append(String.format("%02X", data[i]))
+                    }
+                    append("]")
+                }
+                Log.i(TAG, dump)
+            }
+
+            // Cadence: use byte 7 as raw RPM for now
+            val cadenceRpm = cadenceRaw.toDouble()
+
+            // Speed: if speedRaw > 0, assume KPH * 100
             val speedKph = speedRaw / 100.0
             val speedMph = speedKph * BikeMetrics.KMH_TO_MPH
 
-            // Log parsed values for first few frames
-            if (frameCount <= 5) {
-                Log.d(TAG, "Parsed: cadence=${cadenceRpm}rpm speed=${speedKph}kph " +
-                        "power=${powerRaw}W hr=$heartRate resistance=$resistanceLevel " +
-                        "distance=$distanceRaw elapsed=$elapsedRaw calories=$caloriesRaw tilt=$tilt")
-            }
-
             return BikeMetrics(
-                heartRate = heartRate,
+                heartRate = 0, // No HR from bike — would need BLE HR strap
                 cadence = cadenceRpm,
                 power = powerRaw.coerceAtLeast(0),
                 speed = speedMph,
-                distance = distanceRaw / 1000.0 * BikeMetrics.KM_TO_MILES, // Assume meters
-                elapsedTime = elapsedRaw * 1000L // Assume seconds -> ms
+                resistance = resistance,
+                incline = inclineRaw / 10.0,
+                distance = 0.0,    // Need to accumulate from speed over time
+                elapsedTime = 0L   // Tracked by session timer, not from bike
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse sensor data: ${e.message}")

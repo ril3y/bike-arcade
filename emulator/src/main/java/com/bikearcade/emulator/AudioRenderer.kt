@@ -28,6 +28,9 @@ class AudioRenderer {
     @Volatile
     private var started = false
 
+    @Volatile
+    var isMuted: Boolean = false
+
     fun start(requestedSampleRate: Int = 0) {
         if (started) return
         if (requestedSampleRate > 0) sampleRate = requestedSampleRate
@@ -82,6 +85,10 @@ class AudioRenderer {
 
     fun writeSample(left: Short, right: Short) {
         if (!started) return
+        if (isMuted) {
+            audioTrack?.write(shortArrayOf(0, 0), 0, 2)
+            return
+        }
         audioTrack?.write(shortArrayOf(left, right), 0, 2)
     }
 
@@ -89,7 +96,17 @@ class AudioRenderer {
         if (!started) return
         val count = frames * 2
         val track = audioTrack ?: return
-        // Write all samples, blocking if needed to maintain sync
+        if (isMuted) {
+            // Write silence to keep frame pacing (AudioTrack blocking sync)
+            val silence = ShortArray(count)
+            var offset = 0
+            while (offset < count) {
+                val written = track.write(silence, offset, count - offset)
+                if (written < 0) break
+                offset += written
+            }
+            return
+        }
         var offset = 0
         while (offset < count) {
             val written = track.write(samples, offset, count - offset)

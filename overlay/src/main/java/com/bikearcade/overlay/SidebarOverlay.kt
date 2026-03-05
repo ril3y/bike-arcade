@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bikearcade.media.MediaInfo
 import com.bikearcade.metrics.BikeMetrics
 import com.bikearcade.overlay.components.LiveMetricsPanel
 import com.bikearcade.overlay.components.NowPlayingCard

@@ -13,6 +13,7 @@ val HeartRateRed = Color(0xFFFF3B5C)
 val CadenceBlue = Color(0xFF3BA4FF)
 val PowerGreen = Color(0xFF39FF6E)
 val SpeedOrange = Color(0xFFFF9F2E)
+val ResistanceYellow = Color(0xFFFFD54F)
 
 // Neon accent for highlights and interactive elements
 val NeonAccent = Color(0xFF00FFCC)

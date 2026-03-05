@@ -145,8 +145,8 @@ internal class FrameRenderer {
                 frameReady = true
                 lock.notify()
             }
-        } catch (_: Exception) {
-            // Don't let video errors become pending JNI exceptions
+        } catch (e: Exception) {
+            android.util.Log.w("FrameRenderer", "submitFrame error: ${e.message}")
         }
     }
 

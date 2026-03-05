@@ -48,5 +48,6 @@ dependencies {
 
     // Project modules
     implementation(project(":metrics"))
+    implementation(project(":media"))
     implementation(project(":ui"))
 }

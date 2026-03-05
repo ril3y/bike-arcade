@@ -8,7 +8,7 @@ import com.bikearcade.emulator.CoreType
 import com.bikearcade.emulator.EmulatorThread
 import com.bikearcade.metrics.BikeMetrics
 import com.bikearcade.metrics.BikeMetricsService
-import com.bikearcade.overlay.MediaInfo as OverlayMediaInfo
+import com.bikearcade.media.MediaInfo
 import com.bikearcade.settings.MetricsSourceType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,8 +31,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val bikeMetrics: StateFlow<BikeMetrics> = _bikeMetrics.asStateFlow()
 
     // Media info (bridged to overlay's MediaInfo)
-    private val _mediaInfo = MutableStateFlow(OverlayMediaInfo.EMPTY)
-    val mediaInfo: StateFlow<OverlayMediaInfo> = _mediaInfo.asStateFlow()
+    private val _mediaInfo = MutableStateFlow(MediaInfo.EMPTY)
+    val mediaInfo: StateFlow<MediaInfo> = _mediaInfo.asStateFlow()
 
     // Graph history
     private val _powerHistory = MutableStateFlow<List<Float>>(emptyList())
@@ -48,6 +48,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // HUD visibility
     private val _isHudVisible = MutableStateFlow(true)
     val isHudVisible: StateFlow<Boolean> = _isHudVisible.asStateFlow()
+
+    // Game audio mute
+    private val _isGameMuted = MutableStateFlow(false)
+    val isGameMuted: StateFlow<Boolean> = _isGameMuted.asStateFlow()
 
     // Emulator thread (created when game starts)
     private var emulatorThread: EmulatorThread? = null
@@ -78,17 +82,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Collect media info and bridge to overlay MediaInfo type
+        // Collect media info directly from controller
         viewModelScope.launch {
             container.mediaController.mediaInfo.collect { info ->
-                _mediaInfo.value = OverlayMediaInfo(
-                    trackName = info.trackName,
-                    artist = info.artistName,
-                    albumArtUri = null, // Bitmap not directly usable as URI
-                    isPlaying = info.isPlaying,
-                    durationMs = info.duration,
-                    positionMs = info.position
-                )
+                _mediaInfo.value = info
             }
         }
 
@@ -101,7 +98,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Start media session monitoring
+        // Start media session monitoring — request access if not granted
+        if (!container.mediaSessionMonitor.isListenerEnabled()) {
+            android.util.Log.w("MainViewModel", "Notification listener not enabled, opening settings")
+            try {
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
+                )
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                application.startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "Could not open notification listener settings", e)
+            }
+        }
         container.mediaSessionMonitor.startListening()
 
         // Connect to bike metrics — ensure serial bridge chain is running,
@@ -227,15 +236,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = if (emulatorThread?.isRunning == true) Screen.PLAYING else Screen.LAUNCHER
     }
 
+    fun saveState(slot: Int = 0): Boolean = container.emulatorCore.saveState(slot)
+    fun loadState(slot: Int = 0): Boolean = container.emulatorCore.loadState(slot)
+    fun hasStateFile(slot: Int = 0): Boolean = container.emulatorCore.hasStateFile(slot)
+    fun resetGame() { container.emulatorCore.reset() }
+
     fun toggleHud(visible: Boolean) {
         _isHudVisible.value = visible
+    }
+
+    fun toggleGameMute() {
+        val muted = !_isGameMuted.value
+        _isGameMuted.value = muted
+        container.audioRenderer.isMuted = muted
     }
 
     /**
      * Ensure nautiluslauncher is running so its SerialPortServer (TCP:9999) is available.
      * Also start the serialbridge proxy (TCP:9998) if installed.
      */
-    private fun ensureSerialBridgeRunning() {
+    private suspend fun ensureSerialBridgeRunning() {
         try {
             val ctx = getApplication<BikeArcadeApplication>()
             // Launch nautiluslauncher to un-stop it and trigger SerialPortService
@@ -252,9 +272,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 bridgeIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 ctx.startActivity(bridgeIntent)
                 android.util.Log.i("MainViewModel", "Started serialbridge proxy")
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "Serialbridge proxy not available: ${e.message}")
+            }
             // Give services time to start
-            Thread.sleep(2000)
+            kotlinx.coroutines.delay(2000)
         } catch (e: Exception) {
             android.util.Log.w("MainViewModel", "Could not ensure serial bridge: ${e.message}")
         }

@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ import com.bikearcade.ui.theme.CadenceBlue
 import com.bikearcade.ui.theme.HeartRateRed
 import com.bikearcade.ui.theme.NeonAccent
 import com.bikearcade.ui.theme.PowerGreen
+import com.bikearcade.ui.theme.ResistanceYellow
 import com.bikearcade.ui.theme.SpeedOrange
 
 /**
@@ -89,6 +92,32 @@ fun LiveMetricsPanel(
                 unit = "MPH",
                 label = "Speed",
                 accentColor = SpeedOrange,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Third row: Resistance + Incline
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricCard(
+                icon = Icons.Default.Tune,
+                value = metrics.resistance,
+                unit = "",
+                label = "Resistance",
+                accentColor = ResistanceYellow,
+                modifier = Modifier.weight(1f),
+            )
+
+            MetricCardDouble(
+                icon = Icons.Default.Terrain,
+                value = metrics.incline,
+                unit = "°",
+                label = "Incline",
+                accentColor = NeonAccent,
                 modifier = Modifier.weight(1f),
             )
         }

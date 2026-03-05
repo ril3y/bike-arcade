@@ -8,6 +8,13 @@ add_library(retro_jni SHARED
     libretro_jni.cpp
 )
 
+# Security and warning flags
+target_compile_options(retro_jni PRIVATE
+    -Wall -Wextra -Werror
+    -fstack-protector-strong
+    -D_FORTIFY_SOURCE=2
+)
+
 # Link against Android libraries
 target_link_libraries(retro_jni
     android
