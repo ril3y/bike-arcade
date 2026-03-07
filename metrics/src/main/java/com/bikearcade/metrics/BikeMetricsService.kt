@@ -3,6 +3,10 @@ package com.bikearcade.metrics
 import android.content.Context
 import android.util.Log
 import com.bikearcade.metrics.ble.FtmsManager
+import com.bikearcade.metrics.lean.LeanSensorBridge
+import com.bikearcade.metrics.aidl.AidlMetricsSource
+import com.bikearcade.metrics.direct.DirectMetricsSource
+import com.bikearcade.metrics.logcat.LogcatMetricsSource
 import com.bikearcade.metrics.processing.MetricsProcessor
 import com.bikearcade.metrics.tcp.TcpSerialClient
 import kotlinx.coroutines.CoroutineScope
@@ -14,23 +18,24 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
 /**
  * Main entry point for bike metrics telemetry.
  *
- * Manages the connection lifecycle to either a BLE FTMS device or a TCP serial bridge.
- * Exposes a [SharedFlow] of processed (smoothed) [BikeMetrics] for UI consumption.
+ * Supports three data sources:
+ * - **TCP_SERIAL**: Direct connection to UCB serial bridge (raw sensor data at high frequency)
+ * - **LOGCAT**: Non-invasive, reads JRNY's workout data from logcat (1 Hz, richer data)
+ * - **BLE_FTMS**: Bluetooth FTMS profile for standard fitness machines
  *
- * Usage:
- * ```
- * val service = BikeMetricsService(context)
- * service.connect(SourceType.TCP_SERIAL)
- * service.metricsFlow.collect { metrics -> updateUi(metrics) }
- * ```
+ * Also manages the [LeanSensorBridge] for VeloCore lean angle data.
  */
-class BikeMetricsService(private val context: Context) {
+class BikeMetricsService(
+    private val context: Context,
+    parentScope: CoroutineScope? = null
+) {
 
     companion object {
         private const val TAG = "BikeMetricsService"
@@ -38,10 +43,12 @@ class BikeMetricsService(private val context: Context) {
 
     enum class SourceType {
         BLE_FTMS,
-        TCP_SERIAL
+        TCP_SERIAL,
+        LOGCAT,
+        DIRECT,
+        AIDL
     }
 
-    /** Connection state. */
     enum class ConnectionState {
         DISCONNECTED,
         CONNECTING,
@@ -49,27 +56,29 @@ class BikeMetricsService(private val context: Context) {
         ERROR
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = parentScope?.let {
+        CoroutineScope(it.coroutineContext + SupervisorJob(it.coroutineContext[Job]))
+    } ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var collectionJob: Job? = null
 
     private var activeSource: MetricsSource? = null
     private val processor = MetricsProcessor()
 
+    /** Lean sensor bridge — manages the VeloCore gsensor independently of the metrics source. */
+    val leanSensor = LeanSensorBridge()
+
     private val _metricsFlow = MutableSharedFlow<BikeMetrics>(
         replay = 1,
         extraBufferCapacity = 64
     )
-    /** Flow of processed bike metrics. Replays the last emitted value to new collectors. */
     val metricsFlow: SharedFlow<BikeMetrics> = _metricsFlow.asSharedFlow()
 
     private val _connectionState = MutableSharedFlow<ConnectionState>(
         replay = 1,
         extraBufferCapacity = 8
     )
-    /** Flow of connection state changes. */
     val connectionState: SharedFlow<ConnectionState> = _connectionState.asSharedFlow()
 
-    /** The currently active source type, or null if disconnected. */
     var currentSourceType: SourceType? = null
         private set
 
@@ -77,7 +86,7 @@ class BikeMetricsService(private val context: Context) {
      * Connect to a bike metrics source.
      *
      * @param sourceType The type of source to connect to.
-     * @param bleAddress Optional BLE device address for FTMS. If null, will scan for devices.
+     * @param bleAddress Optional BLE device address for FTMS.
      * @param tcpHost Host for TCP serial bridge (default: "127.0.0.1").
      * @param tcpPort Port for TCP serial bridge (default: 9999).
      */
@@ -85,9 +94,8 @@ class BikeMetricsService(private val context: Context) {
         sourceType: SourceType,
         bleAddress: String? = null,
         tcpHost: String = "127.0.0.1",
-        tcpPort: Int = 9999
+        tcpPort: Int = 9999,
     ) {
-        // Disconnect existing source if any
         disconnect()
 
         _connectionState.emit(ConnectionState.CONNECTING)
@@ -101,8 +109,23 @@ class BikeMetricsService(private val context: Context) {
                     }
                 }
                 SourceType.TCP_SERIAL -> {
-                    TcpSerialClient(tcpHost, tcpPort).also { tcp ->
+                    TcpSerialClient(tcpHost, tcpPort, parentScope = scope).also { tcp ->
                         tcp.connect()
+                    }
+                }
+                SourceType.LOGCAT -> {
+                    LogcatMetricsSource(context).also { logcat ->
+                        logcat.connect()
+                    }
+                }
+                SourceType.DIRECT -> {
+                    DirectMetricsSource(tcpHost, tcpPort, context).also { direct ->
+                        direct.connect()
+                    }
+                }
+                SourceType.AIDL -> {
+                    AidlMetricsSource(context).also { aidl ->
+                        aidl.connect()
                     }
                 }
             }
@@ -110,10 +133,12 @@ class BikeMetricsService(private val context: Context) {
             activeSource = source
             processor.resetSession()
 
-            // Collect raw metrics, process them, and emit
             collectionJob = source.metricsFlow
+                .conflate()
                 .onEach { raw ->
-                    val processed = processor.process(raw)
+                    // Merge lean angle into metrics
+                    val withLean = raw.copy(leanAngle = leanSensor.leanAngle.value)
+                    val processed = processor.process(withLean)
                     _metricsFlow.emit(processed)
                 }
                 .catch { e ->
@@ -133,9 +158,6 @@ class BikeMetricsService(private val context: Context) {
         }
     }
 
-    /**
-     * Disconnect from the current metrics source and release resources.
-     */
     suspend fun disconnect() {
         collectionJob?.cancel()
         collectionJob = null
@@ -153,16 +175,26 @@ class BikeMetricsService(private val context: Context) {
         _connectionState.emit(ConnectionState.DISCONNECTED)
     }
 
-    /** Get the current processed metrics processor for session stats. */
     fun getProcessor(): MetricsProcessor = processor
 
-    /**
-     * Destroy this service, cancelling all coroutines and releasing all resources.
-     * After calling this, the service instance should not be reused.
-     */
+    /** Returns the active direct source if connected, for resistance control. */
+    fun getDirectSource(): MetricsSource.Direct? = activeSource as? MetricsSource.Direct
+
+    /** Re-establish AIDL connection after app returns from background. */
+    fun reconnect() {
+        (activeSource as? AidlMetricsSource)?.reconnect()
+    }
+
     fun destroy() {
         collectionJob?.cancel()
-        scope.cancel()
+        collectionJob = null
+        activeSource?.let { source ->
+            try { kotlinx.coroutines.runBlocking { source.disconnect() } }
+            catch (e: Exception) { Log.w(TAG, "Error during destroy disconnect", e) }
+        }
         activeSource = null
+        currentSourceType = null
+        leanSensor.stop()
+        scope.cancel()
     }
 }

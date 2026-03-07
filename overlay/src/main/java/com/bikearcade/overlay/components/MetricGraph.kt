@@ -62,7 +62,7 @@ fun MetricGraph(
                 color = SurfaceBorder,
                 shape = MaterialTheme.shapes.medium,
             )
-            .padding(12.dp),
+            .padding(8.dp),
     ) {
         // Header with label and current value
         val currentValue = dataPoints.lastOrNull() ?: 0f
@@ -77,7 +77,7 @@ fun MetricGraph(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp),
+                .height(60.dp),
         ) {
             drawGraphBackground(yMin, yMax, yRange)
             if (dataPoints.size >= 2) {
@@ -118,11 +118,7 @@ private fun DrawScope.drawDataLine(
     yRange: Float,
 ) {
     val maxPoints = 60
-    val points = if (dataPoints.size > maxPoints) {
-        dataPoints.takeLast(maxPoints)
-    } else {
-        dataPoints
-    }
+    val points = dataPoints
 
     val path = Path()
     val stepX = size.width / (maxPoints - 1).toFloat()

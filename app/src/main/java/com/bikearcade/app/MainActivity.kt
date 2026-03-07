@@ -21,6 +21,11 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bikearcade.app.launcher.GameLauncherScreen
+import com.bikearcade.app.workout.IntensityPickerDialog
+import com.bikearcade.app.workout.UserSetupScreen
+import com.bikearcade.app.workout.WorkoutScaler
+import com.bikearcade.app.workout.WorkoutSelectionScreen
+import com.bikearcade.settings.ScreenSaverStyle
 import com.bikearcade.settings.SettingsScreen
 import com.bikearcade.ui.theme.BikeArcadeTheme
 
@@ -62,6 +67,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mainViewModel?.resumeEmulation()
+        mainViewModel?.reconnectMetrics()
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
@@ -74,6 +80,13 @@ class MainActivity : ComponentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (inputManager.onKeyUp(keyCode, event)) return true
         return super.onKeyUp(keyCode, event)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            mainViewModel?.resetIdleTimer()
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
@@ -101,11 +114,48 @@ fun BikeArcadeApp(
 
     Crossfade(targetState = screen, label = "screen") { currentScreen ->
         when (currentScreen) {
+            MainViewModel.Screen.SPLASH -> {
+                SplashScreen(onFinished = { viewModel.dismissSplash() })
+            }
+            MainViewModel.Screen.USER_SETUP -> {
+                val profile by viewModel.userProfile.collectAsState()
+                UserSetupScreen(
+                    existingProfile = profile,
+                    onSave = { viewModel.saveUserProfile(it) },
+                )
+            }
+            MainViewModel.Screen.WORKOUT_SELECT -> {
+                val profile by viewModel.userProfile.collectAsState()
+                WorkoutSelectionScreen(
+                    userProfile = profile,
+                    workouts = viewModel.workouts,
+                    onSelectWorkout = { viewModel.selectWorkout(it) },
+                    onChangeUser = { viewModel.changeUser() },
+                    onExitApp = { activity?.finish() },
+                    onManageGames = { viewModel.openGameLibrary() },
+                    onSettings = { viewModel.openSettings() },
+                )
+            }
+            MainViewModel.Screen.INTENSITY_PICK -> {
+                val profile by viewModel.userProfile.collectAsState()
+                val pending by viewModel.pendingWorkout.collectAsState()
+                pending?.let { workout ->
+                    IntensityPickerDialog(
+                        workout = workout,
+                        userProfile = profile,
+                        onConfirm = { intensity ->
+                            val scaled = WorkoutScaler.scale(workout, profile, intensity)
+                            viewModel.confirmWorkoutIntensity(scaled)
+                        },
+                        onCancel = { viewModel.cancelIntensityPick() },
+                    )
+                }
+            }
             MainViewModel.Screen.LAUNCHER -> {
                 GameLauncherScreen(
                     gameLibrary = viewModel.gameLibrary,
                     onGameSelected = { entry -> viewModel.launchGame(entry) },
-                    onExit = { activity?.finish() }
+                    onExit = { viewModel.backToWorkoutSelect() },
                 )
             }
             MainViewModel.Screen.PLAYING -> {
@@ -115,9 +165,22 @@ fun BikeArcadeApp(
                 val app = BikeArcadeApplication.instance
                 SettingsScreen(
                     repository = app.container.settingsRepository,
-                    onClose = { viewModel.closeSettings() }
+                    onClose = { viewModel.closeSettings() },
+                    onTestScreenSaver = {
+                        viewModel.activateScreenSaver()
+                    },
                 )
             }
         }
+    }
+
+    // Screen saver overlay (rendered on top via z-ordering)
+    val isScreenSaverActive by viewModel.isScreenSaverActive.collectAsState()
+    val currentSettings by viewModel.settings.collectAsState()
+    if (isScreenSaverActive) {
+        ScreenSaver(
+            style = currentSettings.screenSaverStyle,
+            onDismiss = { viewModel.dismissScreenSaver() },
+        )
     }
 }

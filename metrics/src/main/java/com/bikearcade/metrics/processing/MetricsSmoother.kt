@@ -18,8 +18,8 @@ import com.bikearcade.metrics.BikeMetrics
 class MetricsSmoother(val alpha: Double = DEFAULT_ALPHA) {
 
     companion object {
-        /** Default smoothing factor. Balances responsiveness and stability. */
-        const val DEFAULT_ALPHA = 0.3
+        /** Default smoothing factor. Responsive at 13 Hz sensor rate. */
+        const val DEFAULT_ALPHA = 0.7
 
         /** Alpha for very smooth output (more lag). */
         const val ALPHA_SMOOTH = 0.15

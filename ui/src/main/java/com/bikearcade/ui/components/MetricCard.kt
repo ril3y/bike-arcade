@@ -1,5 +1,6 @@
 package com.bikearcade.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -43,10 +44,11 @@ fun MetricCard(
     label: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val animatedValue by animateIntAsState(
         targetValue = value,
-        animationSpec = tween(durationMillis = 300),
+        animationSpec = tween(durationMillis = 75),
         label = "metricValue",
     )
 
@@ -61,7 +63,7 @@ fun MetricCard(
                 color = SurfaceBorder,
                 shape = MaterialTheme.shapes.medium,
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 6.dp else 10.dp),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -75,31 +77,33 @@ fun MetricCard(
                     imageVector = icon,
                     contentDescription = label,
                     tint = accentColor,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(if (compact) 14.dp else 20.dp),
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(
                     text = label.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
                     color = TextSecondary,
                 )
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
             Text(
                 text = animatedValue.toString(),
-                style = MaterialTheme.typography.displayMedium,
+                style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
                 color = accentColor,
                 textAlign = TextAlign.Center,
             )
 
-            Text(
-                text = unit,
-                style = MaterialTheme.typography.labelLarge,
-                color = accentColor.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-            )
+            if (!compact) {
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentColor.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -115,15 +119,14 @@ fun MetricCardDouble(
     label: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
-    // Animate the integer part; decimal stays responsive
-    val intPart by animateIntAsState(
-        targetValue = value.toInt(),
-        animationSpec = tween(durationMillis = 300),
-        label = "metricValueInt",
+    val animatedValue by animateFloatAsState(
+        targetValue = value.toFloat(),
+        animationSpec = tween(durationMillis = 75),
+        label = "metricValueFloat",
     )
-    val decimalPart = ((value % 1.0) * 10).toInt()
-    val displayText = "$intPart.$decimalPart"
+    val displayText = "%.1f".format(animatedValue)
 
     Box(
         modifier = modifier
@@ -136,7 +139,7 @@ fun MetricCardDouble(
                 color = SurfaceBorder,
                 shape = MaterialTheme.shapes.medium,
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 6.dp else 10.dp),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -150,31 +153,33 @@ fun MetricCardDouble(
                     imageVector = icon,
                     contentDescription = label,
                     tint = accentColor,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(if (compact) 14.dp else 20.dp),
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(
                     text = label.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
                     color = TextSecondary,
                 )
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
             Text(
                 text = displayText,
-                style = MaterialTheme.typography.displayMedium,
+                style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
                 color = accentColor,
                 textAlign = TextAlign.Center,
             )
 
-            Text(
-                text = unit,
-                style = MaterialTheme.typography.labelLarge,
-                color = accentColor.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-            )
+            if (!compact) {
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentColor.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

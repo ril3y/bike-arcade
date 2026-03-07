@@ -17,9 +17,40 @@ class SettingsRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    init { migrate() }
+
     private val _settings = MutableStateFlow(load())
     /** Current settings, updated on every save. */
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
+
+    /** Run one-time migrations for settings changes between versions. */
+    private fun migrate() {
+        val version = prefs.getInt(KEY_SETTINGS_VERSION, 0)
+        if (version < 1) {
+            // v1: TCP mode doesn't do UCB init — force existing installs to DIRECT
+            val source = prefs.getInt(KEY_METRICS_SOURCE, -1)
+            if (source == MetricsSourceType.TCP.ordinal) {
+                prefs.edit()
+                    .putInt(KEY_METRICS_SOURCE, MetricsSourceType.DIRECT.ordinal)
+                    .putInt(KEY_SETTINGS_VERSION, 1)
+                    .apply()
+            } else {
+                prefs.edit().putInt(KEY_SETTINGS_VERSION, 1).apply()
+            }
+        }
+        if (prefs.getInt(KEY_SETTINGS_VERSION, 0) < 2) {
+            // v2: DIRECT mode replaced by AIDL (SerialBridge handles UCB protocol)
+            val source = prefs.getInt(KEY_METRICS_SOURCE, -1)
+            if (source == MetricsSourceType.DIRECT.ordinal || source == MetricsSourceType.TCP.ordinal) {
+                prefs.edit()
+                    .putInt(KEY_METRICS_SOURCE, MetricsSourceType.AIDL.ordinal)
+                    .putInt(KEY_SETTINGS_VERSION, 2)
+                    .apply()
+            } else {
+                prefs.edit().putInt(KEY_SETTINGS_VERSION, 2).apply()
+            }
+        }
+    }
 
     /** Load all settings from SharedPreferences. */
     fun load(): AppSettings {
@@ -32,7 +63,11 @@ class SettingsRepository(context: Context) {
                 prefs.getInt(KEY_METRICS_SOURCE, AppSettings.DEFAULT_METRICS_SOURCE.ordinal)
             ),
             tcpPort = prefs.getInt(KEY_TCP_PORT, AppSettings.DEFAULT_TCP_PORT),
-            smoothingAlpha = prefs.getFloat(KEY_SMOOTHING_ALPHA, AppSettings.DEFAULT_SMOOTHING_ALPHA)
+            smoothingAlpha = prefs.getFloat(KEY_SMOOTHING_ALPHA, AppSettings.DEFAULT_SMOOTHING_ALPHA),
+            screenSaverTimeoutMinutes = prefs.getInt(KEY_SCREEN_SAVER_TIMEOUT, AppSettings.DEFAULT_SCREEN_SAVER_TIMEOUT),
+            screenSaverStyle = ScreenSaverStyle.fromOrdinal(
+                prefs.getInt(KEY_SCREEN_SAVER_STYLE, AppSettings.DEFAULT_SCREEN_SAVER_STYLE.ordinal)
+            )
         )
     }
 
@@ -46,6 +81,8 @@ class SettingsRepository(context: Context) {
             .putInt(KEY_METRICS_SOURCE, settings.metricsSource.ordinal)
             .putInt(KEY_TCP_PORT, settings.tcpPort)
             .putFloat(KEY_SMOOTHING_ALPHA, settings.smoothingAlpha)
+            .putInt(KEY_SCREEN_SAVER_TIMEOUT, settings.screenSaverTimeoutMinutes)
+            .putInt(KEY_SCREEN_SAVER_STYLE, settings.screenSaverStyle.ordinal)
             .apply()
 
         _settings.value = settings
@@ -70,5 +107,8 @@ class SettingsRepository(context: Context) {
         private const val KEY_METRICS_SOURCE = "metrics_source"
         private const val KEY_TCP_PORT = "tcp_port"
         private const val KEY_SMOOTHING_ALPHA = "smoothing_alpha"
+        private const val KEY_SCREEN_SAVER_TIMEOUT = "screen_saver_timeout"
+        private const val KEY_SCREEN_SAVER_STYLE = "screen_saver_style"
+        private const val KEY_SETTINGS_VERSION = "settings_version"
     }
 }

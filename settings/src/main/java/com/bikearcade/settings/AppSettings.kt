@@ -18,16 +18,20 @@ data class AppSettings(
     val useMetricUnits: Boolean = DEFAULT_USE_METRIC,
     val metricsSource: MetricsSourceType = DEFAULT_METRICS_SOURCE,
     val tcpPort: Int = DEFAULT_TCP_PORT,
-    val smoothingAlpha: Float = DEFAULT_SMOOTHING_ALPHA
+    val smoothingAlpha: Float = DEFAULT_SMOOTHING_ALPHA,
+    val screenSaverTimeoutMinutes: Int = DEFAULT_SCREEN_SAVER_TIMEOUT,
+    val screenSaverStyle: ScreenSaverStyle = DEFAULT_SCREEN_SAVER_STYLE
 ) {
     companion object {
         const val DEFAULT_GAME_SCALE = 1.0f
         const val DEFAULT_SIDEBAR_WIDTH = 640
         const val DEFAULT_HUD_OPACITY = 0.85f
         const val DEFAULT_USE_METRIC = true
-        val DEFAULT_METRICS_SOURCE = MetricsSourceType.TCP
-        const val DEFAULT_TCP_PORT = 9998
+        val DEFAULT_METRICS_SOURCE = MetricsSourceType.AIDL
+        const val DEFAULT_TCP_PORT = 9999
         const val DEFAULT_SMOOTHING_ALPHA = 0.3f
+        const val DEFAULT_SCREEN_SAVER_TIMEOUT = 3
+        val DEFAULT_SCREEN_SAVER_STYLE = ScreenSaverStyle.ARCADE
 
         // Range constraints
         val GAME_SCALE_RANGE = 0.5f..2.0f
@@ -35,6 +39,22 @@ data class AppSettings(
         val HUD_OPACITY_RANGE = 0.0f..1.0f
         val TCP_PORT_RANGE = 1024..65535
         val SMOOTHING_ALPHA_RANGE = 0.0f..1.0f
+        val SCREEN_SAVER_TIMEOUT_RANGE = 1..10
+    }
+}
+
+/**
+ * Available screen saver styles.
+ */
+enum class ScreenSaverStyle(val displayName: String, val description: String) {
+    ARCADE("Arcade", "INSERT COIN attract mode with coin slot"),
+    BOUNCING_LOGO("Bouncing Logo", "DVD-style bouncing BikeArcade logo"),
+    STARFIELD("Starfield", "Flying through stars with title"),
+    BLACKOUT("Blackout", "Pure black screen (max burn-in protection)");
+
+    companion object {
+        fun fromOrdinal(ordinal: Int): ScreenSaverStyle =
+            entries.getOrElse(ordinal) { ARCADE }
     }
 }
 
@@ -43,10 +63,13 @@ data class AppSettings(
  */
 enum class MetricsSourceType(val displayName: String) {
     BLE("Bluetooth (FTMS)"),
-    TCP("TCP Serial Bridge");
+    TCP("TCP Serial Bridge"),
+    LOGCAT("Logcat (JRNY)"),
+    DIRECT("Direct UCB (kills JRNY)"),
+    AIDL("SerialBridge AIDL");
 
     companion object {
         fun fromOrdinal(ordinal: Int): MetricsSourceType =
-            entries.getOrElse(ordinal) { BLE }
+            entries.getOrElse(ordinal) { AIDL }
     }
 }
