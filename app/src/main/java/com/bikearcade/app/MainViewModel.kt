@@ -324,12 +324,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- User & Workout ---
 
     fun dismissSplash() {
-        _currentScreen.value =
-            if (container.userRepository.hasProfile) Screen.WORKOUT_SELECT else Screen.USER_SETUP
+        if (container.userRepository.hasProfile) {
+            _currentScreen.value = Screen.WORKOUT_SELECT
+            return
+        }
+
+        // Try to load profile from VeloLauncher before showing setup screen
+        val launcherProfile = container.userRepository.loadFromLauncher()
+        if (launcherProfile != null && launcherProfile.isValid) {
+            container.userRepository.saveProfile(launcherProfile)
+            _currentScreen.value = Screen.WORKOUT_SELECT
+        } else {
+            _currentScreen.value = Screen.USER_SETUP
+        }
     }
 
     fun saveUserProfile(profile: UserProfile) {
         container.userRepository.saveProfile(profile)
+        // Write back to VeloLauncher so profile is shared across apps
+        container.userRepository.writeToLauncher(profile)
+        fitnessClient.invalidateCache()
         _currentScreen.value = Screen.WORKOUT_SELECT
     }
 
