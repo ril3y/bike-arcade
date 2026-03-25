@@ -26,29 +26,21 @@ class SettingsRepository(context: Context) {
     /** Run one-time migrations for settings changes between versions. */
     private fun migrate() {
         val version = prefs.getInt(KEY_SETTINGS_VERSION, 0)
-        if (version < 1) {
-            // v1: TCP mode doesn't do UCB init — force existing installs to DIRECT
+        if (version < 4) {
+            // v4: Removed DIRECT source. New ordinals: SESSION=0, BLE=1.
+            //   v3 ordinals: SESSION=0, BLE=1, DIRECT=2.
+            //   Pre-v3 ordinals: BLE=0, TCP=1, LOGCAT=2, DIRECT=3, AIDL=4.
+            //   Map BLE to BLE(1), everything else to SESSION(0).
             val source = prefs.getInt(KEY_METRICS_SOURCE, -1)
-            if (source == MetricsSourceType.TCP.ordinal) {
-                prefs.edit()
-                    .putInt(KEY_METRICS_SOURCE, MetricsSourceType.DIRECT.ordinal)
-                    .putInt(KEY_SETTINGS_VERSION, 1)
-                    .apply()
-            } else {
-                prefs.edit().putInt(KEY_SETTINGS_VERSION, 1).apply()
+            val newSource = when {
+                version >= 3 && source == 1 -> 1  // v3 BLE(1) → BLE(1)
+                version < 3 && source == 0 -> 1   // pre-v3 BLE(0) → BLE(1)
+                else -> 0                          // everything else → SESSION(0)
             }
-        }
-        if (prefs.getInt(KEY_SETTINGS_VERSION, 0) < 2) {
-            // v2: DIRECT mode replaced by AIDL (SerialBridge handles UCB protocol)
-            val source = prefs.getInt(KEY_METRICS_SOURCE, -1)
-            if (source == MetricsSourceType.DIRECT.ordinal || source == MetricsSourceType.TCP.ordinal) {
-                prefs.edit()
-                    .putInt(KEY_METRICS_SOURCE, MetricsSourceType.AIDL.ordinal)
-                    .putInt(KEY_SETTINGS_VERSION, 2)
-                    .apply()
-            } else {
-                prefs.edit().putInt(KEY_SETTINGS_VERSION, 2).apply()
-            }
+            prefs.edit()
+                .putInt(KEY_METRICS_SOURCE, newSource)
+                .putInt(KEY_SETTINGS_VERSION, 4)
+                .apply()
         }
     }
 

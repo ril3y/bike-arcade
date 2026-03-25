@@ -16,6 +16,8 @@ import com.bikearcade.overlay.components.EffortZone
 import com.bikearcade.settings.MetricsSourceType
 import com.bikearcade.settings.UserProfile
 import com.bikearcade.settings.WorkoutDefinition
+import io.freewheel.fit.RideStats
+import io.freewheel.fit.VeloFitnessClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as BikeArcadeApplication
     private val container = app.container
+    private val fitnessClient = VeloFitnessClient(application)
+    private var rideStartTime = 0L
 
     // Navigation state
     enum class Screen { SPLASH, USER_SETUP, WORKOUT_SELECT, INTENSITY_PICK, LAUNCHER, PLAYING, SETTINGS }
@@ -206,67 +210,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val settings = container.settingsRepository.settings.value
 
             val primary = when (settings.metricsSource) {
+                MetricsSourceType.SESSION -> BikeMetricsService.SourceType.SESSION
                 MetricsSourceType.BLE -> BikeMetricsService.SourceType.BLE_FTMS
-                MetricsSourceType.TCP -> BikeMetricsService.SourceType.TCP_SERIAL
-                MetricsSourceType.LOGCAT -> BikeMetricsService.SourceType.LOGCAT
-                MetricsSourceType.DIRECT -> BikeMetricsService.SourceType.DIRECT
-                MetricsSourceType.AIDL -> BikeMetricsService.SourceType.AIDL
             }
 
             // Start lean sensor (independent of metrics source)
             container.bikeMetricsService.leanSensor.start()
 
-            when (primary) {
-                BikeMetricsService.SourceType.TCP_SERIAL -> {
-                    // Preferred path: connect to serialbridge proxy on configured port (default 9998).
-                    // Architecture: /dev/ttyS4 → nautiluslauncher (TCP:9999) → serialbridge (TCP:9998) → us
-                    ensureSerialBridgeRunning()
-                    try {
-                        container.bikeMetricsService.connect(primary, tcpPort = settings.tcpPort)
-                        android.util.Log.i("MainViewModel", "Connected to serialbridge on port ${settings.tcpPort}")
-                    } catch (e: Exception) {
-                        android.util.Log.w("MainViewModel", "TCP:${settings.tcpPort} failed: ${e.message}")
-                        // Fall back to logcat (passive, works if JRNY is running a workout)
-                        try {
-                            container.bikeMetricsService.connect(BikeMetricsService.SourceType.LOGCAT)
-                            android.util.Log.i("MainViewModel", "Fell back to logcat metrics source")
-                        } catch (e2: Exception) {
-                            android.util.Log.w("MainViewModel", "All metrics sources failed: ${e2.message}")
-                        }
-                    }
-                }
-                BikeMetricsService.SourceType.LOGCAT -> {
-                    try {
-                        container.bikeMetricsService.connect(primary)
-                        android.util.Log.i("MainViewModel", "Connected to logcat metrics source")
-                    } catch (e: Exception) {
-                        android.util.Log.w("MainViewModel", "Logcat source failed: ${e.message}")
-                    }
-                }
-                BikeMetricsService.SourceType.DIRECT -> {
-                    try {
-                        container.bikeMetricsService.connect(primary)
-                        android.util.Log.i("MainViewModel", "Connected via UCB direct client")
-                    } catch (e: Exception) {
-                        android.util.Log.w("MainViewModel", "Direct source failed: ${e.message}")
-                    }
-                }
-                BikeMetricsService.SourceType.BLE_FTMS -> {
-                    try {
-                        container.bikeMetricsService.connect(primary)
-                        android.util.Log.i("MainViewModel", "Connected to BLE FTMS")
-                    } catch (e: Exception) {
-                        android.util.Log.w("MainViewModel", "BLE failed: ${e.message}")
-                    }
-                }
-                BikeMetricsService.SourceType.AIDL -> {
-                    try {
-                        container.bikeMetricsService.connect(primary)
-                        android.util.Log.i("MainViewModel", "Connected via AIDL BikeService")
-                    } catch (e: Exception) {
-                        android.util.Log.w("MainViewModel", "AIDL source failed: ${e.message}")
-                    }
-                }
+            try {
+                container.bikeMetricsService.connect(primary)
+                android.util.Log.i("MainViewModel", "Connected to $primary source")
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "$primary source failed: ${e.message}")
             }
         }
     }
@@ -310,12 +265,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopGame() {
+        container.bikeMetricsService.getSessionSource()?.requestStop()
+        logRide()
         stopWorkoutTimer()
         emulatorThread?.stop()
         emulatorThread = null
         container.audioRenderer.stop()
         container.emulatorCore.unloadGame()
         _currentScreen.value = Screen.WORKOUT_SELECT
+    }
+
+    private fun logRide() {
+        val elapsed = _workoutElapsedSeconds.value
+        if (elapsed < 60) return // skip rides shorter than 1 minute
+
+        val powerHistory = workoutPowerBuffer.toList()
+        val avgPower = if (powerHistory.isNotEmpty()) powerHistory.average().toInt() else 0
+        val maxPower = powerHistory.maxOrNull() ?: 0
+        val stats = container.bikeMetricsService.getProcessor().sessionStats
+        val currentMetrics = _bikeMetrics.value
+        val workout = _activeWorkout.value
+
+        val builder = RideStats.Builder()
+            .startTime(rideStartTime)
+            .durationSeconds(elapsed)
+            .avgPower(avgPower)
+            .maxPower(maxPower)
+            .avgRpm(stats.avgCadence.toInt())
+            .avgResistance(currentMetrics.resistance)
+            .calories(stats.totalCalories.toInt())
+            .distanceMiles(currentMetrics.distance.toFloat())
+            .avgHeartRate(stats.avgHeartRate)
+            .source("com.bikearcade.app", "BikeArcade")
+
+        if (workout != null) {
+            builder.workout(workout.id, workout.name)
+        }
+
+        val uri = fitnessClient.logRide(builder.build())
+        android.util.Log.i("MainViewModel", "Ride logged: ${elapsed}s, avgPower=${avgPower}W → $uri")
     }
 
     fun pauseEmulation() {
@@ -366,10 +354,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pendingWorkout.value = null
 
         // Precompute target power center for each segment (used by workout graph)
-        val profile = userProfile.value
         _targetPowerPerSegment.value = scaledWorkout.segments.map { seg ->
-            val range = WorkoutScaler.segmentTargetPower(profile, seg.resistanceLevel)
-            (range.first + range.last) / 2
+            val target = fitnessClient.getTargetPower(seg.resistanceLevel)
+            target.centerPower
         }
 
         _currentScreen.value = Screen.LAUNCHER
@@ -399,6 +386,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pauseCountdownJob = null
         _pauseCountdown.value = -1
         hasStartedPedaling = false
+        rideStartTime = System.currentTimeMillis()
+        container.bikeMetricsService.getSessionSource()?.requestStart()
         val workout = _activeWorkout.value ?: return
         workoutTimerJob = viewModelScope.launch {
             while (isActive) {
@@ -415,10 +404,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 workoutPowerBuffer.addLast(currentMetrics.power)
                 _powerHistory_workout.value = workoutPowerBuffer.toList()
 
-                // Apply workout resistance via direct source if available
+                // Apply workout resistance via active source (Session or Direct)
                 if (segment != null) {
-                    container.bikeMetricsService.getDirectSource()
-                        ?.setResistance(segment.resistanceLevel)
+                    container.bikeMetricsService.setResistance(segment.resistanceLevel)
                 }
 
                 if (elapsed >= workout.totalDurationSeconds) {
@@ -438,25 +426,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val workout = _activeWorkout.value ?: return
         val elapsed = _workoutElapsedSeconds.value
         val segment = workout.segmentAt(elapsed) ?: return
-        val profile = userProfile.value
         val multiplier = _difficultyMultiplier.value
 
-        val baseRange = WorkoutScaler.segmentTargetPower(profile, segment.resistanceLevel)
-        val targetLow = (baseRange.first * multiplier).toInt()
-        val targetHigh = (baseRange.last * multiplier).toInt()
-        val centerTarget = (targetLow + targetHigh) / 2f
-        val maxDisplay = centerTarget * 2f
+        val target = fitnessClient.getTargetPower(segment.resistanceLevel, multiplier)
+        val targetLow = target.targetLow
+        val targetHigh = target.targetHigh
+        val maxDisplay = target.maxDisplay()
         val actualPower = metrics.power
 
-        val ratio = if (maxDisplay > 0f) (actualPower / maxDisplay).coerceIn(0f, 1f) else 0f
-        val zoneLow = if (maxDisplay > 0f) (targetLow / maxDisplay).coerceIn(0f, 1f) else 0.35f
-        val zoneHigh = if (maxDisplay > 0f) (targetHigh / maxDisplay).coerceIn(0f, 1f) else 0.65f
+        val ratio = target.complianceRatio(actualPower)
+        val zoneLow = target.zoneLowFraction()
+        val zoneHigh = target.zoneHighFraction()
 
-        val zone = when {
-            actualPower == 0 -> EffortZone.IDLE
-            actualPower < targetLow -> EffortZone.UNDER
-            actualPower > targetHigh -> EffortZone.OVER
-            else -> EffortZone.ON_TARGET
+        val effortZone = target.zone(actualPower)
+        val zone = when (effortZone) {
+            io.freewheel.fit.PowerTarget.EffortZone.IDLE -> EffortZone.IDLE
+            io.freewheel.fit.PowerTarget.EffortZone.UNDER -> EffortZone.UNDER
+            io.freewheel.fit.PowerTarget.EffortZone.ON_TARGET -> EffortZone.ON_TARGET
+            io.freewheel.fit.PowerTarget.EffortZone.OVER -> EffortZone.OVER
         }
 
         _effortCompliance.value = EffortComplianceState(
@@ -476,7 +463,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (metrics.cadence >= 1.0 || metrics.power > 0) {
             hasStartedPedaling = true
         }
-        if (_pauseOnStop.value && emulatorThread?.isRunning == true && hasStartedPedaling) {
+        if (_pauseOnStop.value && emulatorThread?.isRunning == true && emulatorThread?.isPaused == false && hasStartedPedaling) {
             val belowTarget = zone == EffortZone.UNDER || zone == EffortZone.IDLE
             if (belowTarget && !_isPedalPaused.value && pauseCountdownJob == null) {
                 // Start countdown
@@ -527,10 +514,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Re-establish metrics connection after returning from background. */
-    fun reconnectMetrics() {
-        container.bikeMetricsService.reconnect()
-    }
 
     fun openSettings() {
         _currentScreen.value = Screen.SETTINGS
@@ -566,26 +549,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (level > 0f && _isGameMuted.value) {
             _isGameMuted.value = false
             container.audioRenderer.isMuted = false
-        }
-    }
-
-    /**
-     * Ensure the serialbridge proxy (TCP:9998) is running.
-     * nautiluslauncher (system app, uid 1000) serves /dev/ttyS4 on TCP:9999 and is always running.
-     * The serialbridge proxy connects to 9999 as the sole client and re-serves on 9998 for multi-client access.
-     */
-    private suspend fun ensureSerialBridgeRunning() {
-        try {
-            val ctx = getApplication<BikeArcadeApplication>()
-            val bridgeIntent = android.content.Intent()
-            bridgeIntent.setClassName("com.bowflex.serialbridge", "com.bowflex.serialbridge.MainActivity")
-            bridgeIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            ctx.startActivity(bridgeIntent)
-            android.util.Log.i("MainViewModel", "Started serialbridge proxy")
-            // Give the proxy time to connect to 9999 and start listening on 9998
-            kotlinx.coroutines.delay(2000)
-        } catch (e: Exception) {
-            android.util.Log.w("MainViewModel", "Serialbridge proxy not available: ${e.message}")
         }
     }
 

@@ -11,10 +11,7 @@ import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -23,7 +20,6 @@ import com.bikearcade.ui.components.MetricCard
 import com.bikearcade.ui.components.MetricCardDouble
 import com.bikearcade.ui.theme.CadenceBlue
 import com.bikearcade.ui.theme.HeartRateRed
-import com.bikearcade.ui.theme.NeonAccent
 import com.bikearcade.ui.theme.PowerGreen
 import com.bikearcade.ui.theme.ResistanceYellow
 import com.bikearcade.ui.theme.SpeedOrange
@@ -38,28 +34,20 @@ fun LiveMetricsPanel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "LIVE METRICS",
-            style = MaterialTheme.typography.titleMedium,
-            color = NeonAccent,
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        // Top row: HR + Cadence
+        // 3-column row: HR, Cadence, Power
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             MetricCard(
                 icon = Icons.Default.Favorite,
                 value = metrics.heartRate,
                 unit = "BPM",
-                label = "Heart Rate",
+                label = "HR",
                 accentColor = HeartRateRed,
                 modifier = Modifier.weight(1f),
+                compact = true,
             )
-
             MetricCard(
                 icon = Icons.Default.DirectionsBike,
                 value = metrics.cadence.toInt(),
@@ -67,16 +55,8 @@ fun LiveMetricsPanel(
                 label = "Cadence",
                 accentColor = CadenceBlue,
                 modifier = Modifier.weight(1f),
+                compact = true,
             )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Bottom row: Power + Speed
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
             MetricCard(
                 icon = Icons.Default.FlashOn,
                 value = metrics.power,
@@ -84,8 +64,17 @@ fun LiveMetricsPanel(
                 label = "Power",
                 accentColor = PowerGreen,
                 modifier = Modifier.weight(1f),
+                compact = true,
             )
+        }
 
+        Spacer(Modifier.height(6.dp))
+
+        // 2-column row: Speed, Resistance
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             MetricCardDouble(
                 icon = Icons.Default.Speed,
                 value = metrics.speed,
@@ -93,32 +82,16 @@ fun LiveMetricsPanel(
                 label = "Speed",
                 accentColor = SpeedOrange,
                 modifier = Modifier.weight(1f),
+                compact = true,
             )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Third row: Resistance + Incline
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
             MetricCard(
                 icon = Icons.Default.Tune,
                 value = metrics.resistance,
                 unit = "",
-                label = "Resistance",
+                label = "Resist",
                 accentColor = ResistanceYellow,
                 modifier = Modifier.weight(1f),
-            )
-
-            MetricCardDouble(
-                icon = Icons.Default.Terrain,
-                value = metrics.incline,
-                unit = "°",
-                label = "Incline",
-                accentColor = NeonAccent,
-                modifier = Modifier.weight(1f),
+                compact = true,
             )
         }
     }

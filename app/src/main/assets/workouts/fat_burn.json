@@ -1,0 +1,10 @@
+{
+  "id": "fat_burn",
+  "name": "Fat Burn",
+  "description": "20 min moderate steady-state for fat burning.",
+  "segments": [
+    { "durationSeconds": 180, "resistanceLevel": 3, "name": "Warm Up" },
+    { "durationSeconds": 900, "resistanceLevel": 12, "name": "Fat Burn Zone" },
+    { "durationSeconds": 120, "resistanceLevel": 8, "name": "Recovery" }
+  ]
+}

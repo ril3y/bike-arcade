@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Genesis 3-button controller -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M6,20 C6,14 12,12 18,12 h12 c6,0 12,2 12,8 v8 c0,6 -6,10 -12,10 h-12 c-6,0 -12,-4 -12,-10 z" />
+    <!-- D-pad -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M14,22 h-2 v4 h2 v2 h4 v-2 h2 v-4 h-2 v-2 h-4 z" />
+    <!-- 3 face buttons -->
+    <path android:fillColor="#1A1A2E" android:pathData="M29,20.5 a2.5,2.5 0,1,1 0,5 a2.5,2.5 0,1,1 0,-5 z" />
+    <path android:fillColor="#1A1A2E" android:pathData="M34,18.5 a2.5,2.5 0,1,1 0,5 a2.5,2.5 0,1,1 0,-5 z" />
+    <path android:fillColor="#1A1A2E" android:pathData="M39,20.5 a2.5,2.5 0,1,1 0,5 a2.5,2.5 0,1,1 0,-5 z" />
+</vector>

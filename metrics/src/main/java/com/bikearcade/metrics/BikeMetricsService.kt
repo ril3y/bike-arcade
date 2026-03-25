@@ -4,11 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.bikearcade.metrics.ble.FtmsManager
 import com.bikearcade.metrics.lean.LeanSensorBridge
-import com.bikearcade.metrics.aidl.AidlMetricsSource
-import com.bikearcade.metrics.direct.DirectMetricsSource
-import com.bikearcade.metrics.logcat.LogcatMetricsSource
+import com.bikearcade.metrics.session.SessionMetricsSource
 import com.bikearcade.metrics.processing.MetricsProcessor
-import com.bikearcade.metrics.tcp.TcpSerialClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,9 +22,8 @@ import kotlinx.coroutines.flow.onEach
 /**
  * Main entry point for bike metrics telemetry.
  *
- * Supports three data sources:
- * - **TCP_SERIAL**: Direct connection to UCB serial bridge (raw sensor data at high frequency)
- * - **LOGCAT**: Non-invasive, reads JRNY's workout data from logcat (1 Hz, richer data)
+ * Supports two data sources:
+ * - **SESSION**: VeloLauncher WorkoutSessionClient (AIDL)
  * - **BLE_FTMS**: Bluetooth FTMS profile for standard fitness machines
  *
  * Also manages the [LeanSensorBridge] for VeloCore lean angle data.
@@ -43,10 +39,7 @@ class BikeMetricsService(
 
     enum class SourceType {
         BLE_FTMS,
-        TCP_SERIAL,
-        LOGCAT,
-        DIRECT,
-        AIDL
+        SESSION
     }
 
     enum class ConnectionState {
@@ -87,14 +80,10 @@ class BikeMetricsService(
      *
      * @param sourceType The type of source to connect to.
      * @param bleAddress Optional BLE device address for FTMS.
-     * @param tcpHost Host for TCP serial bridge (default: "127.0.0.1").
-     * @param tcpPort Port for TCP serial bridge (default: 9999).
      */
     suspend fun connect(
         sourceType: SourceType,
         bleAddress: String? = null,
-        tcpHost: String = "127.0.0.1",
-        tcpPort: Int = 9999,
     ) {
         disconnect()
 
@@ -108,24 +97,9 @@ class BikeMetricsService(
                         ftms.scanAndConnect(bleAddress)
                     }
                 }
-                SourceType.TCP_SERIAL -> {
-                    TcpSerialClient(tcpHost, tcpPort, parentScope = scope).also { tcp ->
-                        tcp.connect()
-                    }
-                }
-                SourceType.LOGCAT -> {
-                    LogcatMetricsSource(context).also { logcat ->
-                        logcat.connect()
-                    }
-                }
-                SourceType.DIRECT -> {
-                    DirectMetricsSource(tcpHost, tcpPort, context).also { direct ->
-                        direct.connect()
-                    }
-                }
-                SourceType.AIDL -> {
-                    AidlMetricsSource(context).also { aidl ->
-                        aidl.connect()
+                SourceType.SESSION -> {
+                    SessionMetricsSource(context).also { session ->
+                        session.connect()
                     }
                 }
             }
@@ -177,12 +151,13 @@ class BikeMetricsService(
 
     fun getProcessor(): MetricsProcessor = processor
 
-    /** Returns the active direct source if connected, for resistance control. */
-    fun getDirectSource(): MetricsSource.Direct? = activeSource as? MetricsSource.Direct
+    /** Returns the active session source if connected, for session lifecycle and resistance. */
+    fun getSessionSource(): MetricsSource.Session? = activeSource as? MetricsSource.Session
 
-    /** Re-establish AIDL connection after app returns from background. */
-    fun reconnect() {
-        (activeSource as? AidlMetricsSource)?.reconnect()
+    /** Set resistance on whichever active source supports it. */
+    fun setResistance(level: Int): Boolean = when (val src = activeSource) {
+        is MetricsSource.Session -> src.setResistance(level)
+        else -> false
     }
 
     fun destroy() {

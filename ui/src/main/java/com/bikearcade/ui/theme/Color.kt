@@ -3,6 +3,7 @@ package com.bikearcade.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Core background palette
+val SurfaceDark = Color(0xFF0D0D14)
 val DarkBackground = Color(0xFF0A0A0F)
 val SurfaceColor = Color(0xFF14141F)
 val SurfaceBright = Color(0xFF1E1E2E)
@@ -14,6 +15,10 @@ val CadenceBlue = Color(0xFF3BA4FF)
 val PowerGreen = Color(0xFF39FF6E)
 val SpeedOrange = Color(0xFFFF9F2E)
 val ResistanceYellow = Color(0xFFFFD54F)
+
+// Effort compliance zones
+val EffortOver = Color(0xFFFF6B3B)
+val EffortUnder = Color(0xFF3B8FFF)
 
 // Neon accent for highlights and interactive elements
 val NeonAccent = Color(0xFF00FFCC)

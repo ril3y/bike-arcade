@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- SNES controller rounded shape -->
+    <path
+        android:fillColor="#7E57C2"
+        android:pathData="M6,18 C6,14 10,12 14,12 h20 c4,0 8,2 8,6 v12 c0,4 -4,6 -8,6 h-20 c-4,0 -8,-2 -8,-6 z" />
+    <!-- D-pad -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M13,22 h-2 v4 h2 v2 h4 v-2 h2 v-4 h-2 v-2 h-4 z" />
+    <!-- X (top) -->
+    <path android:fillColor="#3949AB" android:pathData="M34,17.8 a2.2,2.2 0,1,1 0,4.4 a2.2,2.2 0,1,1 0,-4.4 z" />
+    <!-- A (right) -->
+    <path android:fillColor="#E53935" android:pathData="M38,21.8 a2.2,2.2 0,1,1 0,4.4 a2.2,2.2 0,1,1 0,-4.4 z" />
+    <!-- B (bottom) -->
+    <path android:fillColor="#FDD835" android:pathData="M34,25.8 a2.2,2.2 0,1,1 0,4.4 a2.2,2.2 0,1,1 0,-4.4 z" />
+    <!-- Y (left) -->
+    <path android:fillColor="#43A047" android:pathData="M30,21.8 a2.2,2.2 0,1,1 0,4.4 a2.2,2.2 0,1,1 0,-4.4 z" />
+</vector>

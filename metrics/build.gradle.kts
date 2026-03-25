@@ -22,6 +22,12 @@ android {
 }
 
 dependencies {
+    // UCB protocol library (Bowflex bike data)
+    implementation(files("libs/ucblib.jar"))
+
+    // VeloLauncher fitness SDK (WorkoutSessionClient for session-based metrics)
+    implementation(files("libs/velofit.jar"))
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

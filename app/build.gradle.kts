@@ -27,6 +27,15 @@ android {
         versionName = "$vMajor.$vMinor.$vPatch"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -34,6 +43,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false
@@ -79,6 +89,9 @@ dependencies {
     implementation(project(":ui"))
     implementation(project(":media"))
     implementation(project(":settings"))
+
+    // VeloLauncher fitness API (shared profile, workouts, ride logging)
+    implementation(files("../metrics/libs/velofit.jar"))
 
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.00")

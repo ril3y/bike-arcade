@@ -531,19 +531,19 @@ ROI: **Quick Win** — pass as parameters to init function.
 
 ## Recommended Fix Order (ROI-prioritized)
 
-### Phase 1 — Quick Wins (1-2 days)
-1. **ANDR-001** — Replace `Thread.sleep` with `delay` (S)
-2. **ANDR-003** — Add logging to swallowed exceptions (S)
-3. **JNI-004** — Free buffers in `nativeUnloadCore` (S)
-4. **JNI-002** — Add size caps to audio/video buffers (S)
-5. **BUILD-005** — Add ProGuard JNI keep rules (S)
-6. **BUILD-001** — Add CMake security flags (S)
-7. **ANDR-005** — Unify MediaInfo classes (M)
+### Phase 1 — Quick Wins (1-2 days) ✅ DONE (commit a3f5516)
+1. ~~**ANDR-001** — Replace `Thread.sleep` with `delay`~~
+2. ~~**ANDR-003** — Add logging to swallowed exceptions~~
+3. ~~**JNI-004** — Free buffers in `nativeUnloadCore`~~
+4. ~~**JNI-002** — Add size caps to audio/video buffers~~
+5. ~~**BUILD-005** — Add ProGuard JNI keep rules~~
+6. ~~**BUILD-001** — Add CMake security flags~~
+7. ~~**ANDR-005** — Unify MediaInfo classes~~
+8. ~~**JNI-001** — Add ExceptionCheck to all JNI callbacks~~
+9. ~~**JNI-003** — Add pthread mutexes for shared state~~
 
-### Phase 2 — Safety (3-5 days)
-8. **JNI-001** — Add ExceptionCheck to all JNI callbacks (M)
-9. **JNI-003** — Add pthread mutexes for shared state (M)
-10. **ANDR-002** — Wire coroutine scopes to lifecycle (M)
+### Phase 2 — Safety ✅ DONE
+10. ~~**ANDR-002** — Wire coroutine scopes to lifecycle~~ (parentScope param added to all 4 services)
 
 ### Phase 3 — Foundation (1-2 weeks)
 11. **BUILD-002** — Add test infrastructure + protocol parser tests (M)

@@ -1,0 +1,10 @@
+{
+  "id": "endurance",
+  "name": "Endurance",
+  "description": "45 min moderate pace. Build stamina.",
+  "segments": [
+    { "durationSeconds": 300, "resistanceLevel": 5, "name": "Warm Up" },
+    { "durationSeconds": 2100, "resistanceLevel": 10, "name": "Endurance Zone" },
+    { "durationSeconds": 300, "resistanceLevel": 5, "name": "Cool Down" }
+  ]
+}

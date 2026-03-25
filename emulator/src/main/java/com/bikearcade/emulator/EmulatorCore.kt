@@ -7,6 +7,20 @@ import java.nio.ByteBuffer
 import java.util.zip.ZipFile
 
 /**
+ * Thrown when a libretro core .so file is not found on disk.
+ * The UI should catch this and prompt the user to download the core
+ * via [CoreDownloader].
+ *
+ * @property platform The [Platform] whose core is missing, or null if loaded by raw path.
+ * @property coreLibrary The expected .so filename.
+ */
+class CoreNotInstalledException(
+    val platform: Platform? = null,
+    val coreLibrary: String,
+    message: String = "Core not installed: $coreLibrary",
+) : Exception(message)
+
+/**
  * High-level manager for the libretro emulator lifecycle.
  *
  * Wraps [LibretroBridge] with state tracking, callback wiring, and
@@ -144,14 +158,45 @@ class EmulatorCore(private val context: Context) {
         val privateCore = File(coresDir, coreType.coreLibrary)
 
         if (externalCore.exists()) {
-            // Copy or update if source is newer
             if (!privateCore.exists() || externalCore.lastModified() > privateCore.lastModified()) {
                 Log.i(TAG, "Copying core to private dir: ${externalCore.name}")
                 externalCore.copyTo(privateCore, overwrite = true)
             }
         }
 
+        if (!privateCore.exists() && !externalCore.exists()) {
+            throw CoreNotInstalledException(
+                coreLibrary = coreType.coreLibrary,
+            )
+        }
+
         val corePath = if (privateCore.exists()) privateCore.absolutePath else CoreType.corePathFor(coreType)
+        loadCore(corePath)
+    }
+
+    /**
+     * Load a core from a [Platform] definition.
+     * Copies the core .so from external storage to the app's private directory.
+     */
+    fun loadCore(platform: Platform) {
+        val externalCore = File(PlatformRegistry.corePathFor(platform))
+        val privateCore = File(coresDir, platform.coreLibrary)
+
+        if (externalCore.exists()) {
+            if (!privateCore.exists() || externalCore.lastModified() > privateCore.lastModified()) {
+                Log.i(TAG, "Copying core to private dir: ${externalCore.name}")
+                externalCore.copyTo(privateCore, overwrite = true)
+            }
+        }
+
+        if (!privateCore.exists() && !externalCore.exists()) {
+            throw CoreNotInstalledException(
+                platform = platform,
+                coreLibrary = platform.coreLibrary,
+            )
+        }
+
+        val corePath = if (privateCore.exists()) privateCore.absolutePath else PlatformRegistry.corePathFor(platform)
         loadCore(corePath)
     }
 

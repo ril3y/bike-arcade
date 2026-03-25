@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
  * Requires an active [MediaController] obtained from [MediaSessionMonitor].
  */
 class BikeArcadeMediaController(
-    @Suppress("unused") private val context: Context
+    @Suppress("unused") private val context: Context,
+    parentScope: CoroutineScope? = null
 ) {
     private val _mediaInfo = MutableStateFlow(MediaInfo.EMPTY)
     /** Current media session state, updated in real-time. */
@@ -31,7 +32,8 @@ class BikeArcadeMediaController(
 
     private var activeController: MediaController? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope = parentScope?.let { CoroutineScope(it.coroutineContext + Job(it.coroutineContext[Job])) }
+        ?: CoroutineScope(Dispatchers.Main + Job())
     private var positionPollingJob: Job? = null
 
     private val mediaCallback = object : MediaController.Callback() {

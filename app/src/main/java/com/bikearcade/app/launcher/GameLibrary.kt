@@ -2,6 +2,7 @@ package com.bikearcade.app.launcher
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.bikearcade.emulator.PlatformRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,25 +15,33 @@ import java.util.zip.ZipFile
  * Scans the ROM directory for supported game files and maintains
  * a reactive list of discovered [GameEntry] items.
  *
+ * Platforms are discovered from [PlatformRegistry] — adding a new platform
+ * there automatically makes its ROMs scannable here.
+ *
  * ROM directory: /storage/emulated/0/BikeArcade/roms/
- * Supported formats: .nes, .smc, .sfc, .zip (containing supported ROMs)
  */
-class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManager? = null) {
+class GameLibrary(
+    context: Context,
+    private val thumbnailManager: ThumbnailManager? = null,
+    private val metadataDB: GameMetadataDB? = null,
+) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _games = MutableStateFlow<List<GameEntry>>(emptyList())
-    /** Reactive list of discovered games, sorted by last played then alphabetically. */
     val games: StateFlow<List<GameEntry>> = _games.asStateFlow()
 
     private val _isScanning = MutableStateFlow(false)
-    /** Whether a scan is currently in progress. */
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    private val metadataCache = MetadataCache(
+        File(ROM_DIRECTORY).parentFile ?: File("/storage/emulated/0/BikeArcade")
+    )
+
     /**
-     * Scan the ROM directory for supported files.
-     * Updates [games] with the results, sorted by last played (descending) then name.
+     * Scan ROMs and apply ALL cached data (thumbnails + metadata) before
+     * publishing to the UI. Games appear fully enriched on first frame.
      */
     suspend fun scan() {
         _isScanning.value = true
@@ -43,19 +52,33 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
                     return@withContext emptyList<GameEntry>()
                 }
 
+                // Load metadata cache once (small JSON, <50KB)
+                val cachedMeta = metadataCache.loadAll()
+
                 romDir.listFiles()
                     ?.filter { it.isFile }
                     ?.mapNotNull { file -> parseRomFile(file) }
+                    ?.map { entry ->
+                        // Apply cached thumbnail
+                        val art = thumbnailManager?.getCachedThumbnail(entry)
+                        val withArt = if (art != null) entry.copy(artworkPath = art.absolutePath) else entry
+
+                        // Apply cached metadata
+                        val meta = cachedMeta[withArt.cacheKey]
+                        if (meta != null) {
+                            withArt.copy(
+                                releaseDate = meta.releaseDate,
+                                genre = meta.genre,
+                                publisher = meta.publisher,
+                                developer = meta.developer,
+                                description = meta.description,
+                            )
+                        } else withArt
+                    }
                     ?: emptyList()
             }
 
-            // Attach cached thumbnails
-            val entriesWithArt = entries.map { entry ->
-                val cached = thumbnailManager?.getCachedThumbnail(entry)
-                if (cached != null) entry.copy(artworkPath = cached.absolutePath) else entry
-            }
-
-            _games.value = entriesWithArt.sortedWith(
+            _games.value = entries.sortedWith(
                 compareByDescending<GameEntry> { it.lastPlayed }
                     .thenBy { it.name.lowercase() }
             )
@@ -65,25 +88,81 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
     }
 
     /**
-     * Download missing thumbnails in the background and update entries as they arrive.
+     * Fetch thumbnails for games that don't have cached art yet.
+     * Batches updates every 3 downloads to reduce recomposition churn.
      */
     suspend fun fetchMissingThumbnails() {
         val tm = thumbnailManager ?: return
-        val current = _games.value
-        for (entry in current) {
-            if (entry.artworkPath != null) continue
+        val missing = _games.value.filter { it.artworkPath == null }
+        if (missing.isEmpty()) return
+
+        val updates = mutableMapOf<String, String>() // path -> artworkPath
+        for (entry in missing) {
             val file = tm.fetchThumbnail(entry)
             if (file != null) {
-                _games.value = _games.value.map { g ->
-                    if (g.path == entry.path) g.copy(artworkPath = file.absolutePath) else g
+                updates[entry.path] = file.absolutePath
+            }
+            // Batch-apply every 3 downloads or at the end
+            if (updates.size >= 3 || entry === missing.last()) {
+                if (updates.isNotEmpty()) {
+                    _games.value = _games.value.map { g ->
+                        val art = updates[g.path]
+                        if (art != null) g.copy(artworkPath = art) else g
+                    }
+                    updates.clear()
                 }
             }
         }
     }
 
     /**
-     * Record that a game was launched, updating its lastPlayed timestamp.
+     * Enrich games missing metadata. Queries OpenVGDB only for unknowns,
+     * then saves results to cache for instant loading next time.
      */
+    suspend fun fetchMetadata() {
+        val mdb = metadataDB ?: return
+
+        // Only look up games that scan() didn't enrich from cache
+        val needsLookup = _games.value.filter { it.releaseDate == null }
+        if (needsLookup.isEmpty()) return
+
+        // Download OpenVGDB if needed (42MB, first run only)
+        if (!mdb.ensureDownloaded()) return
+
+        // Query only the missing games
+        val newEntries = mutableMapOf<String, GameMetadata>()
+        val enriched = withContext(Dispatchers.IO) {
+            needsLookup.mapNotNull { entry ->
+                val meta = mdb.lookup(entry.name, entry.platformId) ?: return@mapNotNull null
+                newEntries[entry.cacheKey] = meta
+                entry.path to meta
+            }.toMap()
+        }
+
+        // Single bulk update to the games list
+        if (enriched.isNotEmpty()) {
+            _games.value = _games.value.map { entry ->
+                val meta = enriched[entry.path]
+                if (meta != null) {
+                    entry.copy(
+                        releaseDate = meta.releaseDate,
+                        genre = meta.genre,
+                        publisher = meta.publisher,
+                        developer = meta.developer,
+                        description = meta.description,
+                    )
+                } else entry
+            }
+
+            // Merge into cache for next launch
+            withContext(Dispatchers.IO) {
+                val existing = metadataCache.loadAll().toMutableMap()
+                existing.putAll(newEntries)
+                metadataCache.saveAll(existing)
+            }
+        }
+    }
+
     fun recordLaunch(entry: GameEntry) {
         val now = System.currentTimeMillis()
         prefs.edit().putLong(lastPlayedKey(entry.path), now).apply()
@@ -100,29 +179,25 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
         val extension = file.extension.lowercase()
 
         return when (extension) {
-            "nes" -> createEntry(file, ConsoleType.NES)
-            "smc", "sfc" -> createEntry(file, ConsoleType.SNES)
             "zip" -> parseZipFile(file)
-            else -> null
+            else -> {
+                val platform = PlatformRegistry.fromExtension(extension) ?: return null
+                createEntry(file, platform.id)
+            }
         }
     }
 
-    /**
-     * Peek inside a .zip file to determine the console type from the
-     * first supported ROM found within.
-     */
     private fun parseZipFile(file: File): GameEntry? {
         return try {
             ZipFile(file).use { zip ->
                 val romEntry = zip.entries().asSequence().firstOrNull { entry ->
                     val ext = entry.name.substringAfterLast('.', "").lowercase()
-                    ext in SUPPORTED_EXTENSIONS
+                    ext in PlatformRegistry.ALL_ROM_EXTENSIONS
                 }
 
                 if (romEntry != null) {
                     val innerExt = romEntry.name.substringAfterLast('.', "").lowercase()
-                    val consoleType = extensionToConsole(innerExt) ?: return@use null
-                    // Use the inner ROM name for display, but the zip path for launching
+                    val platform = PlatformRegistry.fromExtension(innerExt) ?: return@use null
                     val displayName = romEntry.name
                         .substringAfterLast('/')
                         .substringBeforeLast('.')
@@ -131,7 +206,7 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
                     GameEntry(
                         name = displayName,
                         path = file.absolutePath,
-                        consoleType = consoleType,
+                        platformId = platform.id,
                         lastPlayed = getLastPlayed(file.absolutePath),
                         fileSize = file.length()
                     )
@@ -140,16 +215,15 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
                 }
             }
         } catch (_: Exception) {
-            // Corrupt or unreadable zip
             null
         }
     }
 
-    private fun createEntry(file: File, consoleType: ConsoleType): GameEntry {
+    private fun createEntry(file: File, platformId: String): GameEntry {
         return GameEntry(
             name = file.nameWithoutExtension.cleanRomName(),
             path = file.absolutePath,
-            consoleType = consoleType,
+            platformId = platformId,
             lastPlayed = getLastPlayed(file.absolutePath),
             fileSize = file.length()
         )
@@ -165,25 +239,10 @@ class GameLibrary(context: Context, private val thumbnailManager: ThumbnailManag
         private const val PREFS_NAME = "game_library"
         const val ROM_DIRECTORY = "/storage/emulated/0/BikeArcade/roms"
 
-        /** File extensions supported directly (not inside zips). */
-        private val SUPPORTED_EXTENSIONS = setOf("nes", "smc", "sfc")
-
-        private fun extensionToConsole(ext: String): ConsoleType? = when (ext) {
-            "nes" -> ConsoleType.NES
-            "smc", "sfc" -> ConsoleType.SNES
-            else -> null
-        }
-
-        /**
-         * Clean up ROM filenames for display:
-         * - Remove common tags like [!], (U), (USA), (Europe), etc.
-         * - Replace underscores with spaces.
-         * - Trim extra whitespace.
-         */
         private fun String.cleanRomName(): String {
             return this
-                .replace(Regex("\\[.*?]"), "")     // Remove [tags]
-                .replace(Regex("\\(.*?\\)"), "")   // Remove (tags)
+                .replace(Regex("\\[.*?]"), "")
+                .replace(Regex("\\(.*?\\)"), "")
                 .replace('_', ' ')
                 .replace(Regex("\\s+"), " ")
                 .trim()

@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- NES controller body -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M8,16 h32 a4,4 0,0,1 4,4 v8 a4,4 0,0,1 -4,4 h-32 a4,4 0,0,1 -4,-4 v-8 a4,4 0,0,1 4,-4 z" />
+    <!-- D-pad -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M14,22 h-2 v4 h2 v2 h4 v-2 h2 v-4 h-2 v-2 h-4 z" />
+    <!-- A button (circle as arc) -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M36,21 a3,3 0,1,1 0,6 a3,3 0,1,1 0,-6 z" />
+    <!-- B button -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M29,21 a3,3 0,1,1 0,6 a3,3 0,1,1 0,-6 z" />
+</vector>

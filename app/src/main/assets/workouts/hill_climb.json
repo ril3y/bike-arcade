@@ -1,0 +1,15 @@
+{
+  "id": "hill_climb",
+  "name": "Hill Climb",
+  "description": "25 min of increasing resistance. Climb the mountain!",
+  "segments": [
+    { "durationSeconds": 180, "resistanceLevel": 5, "name": "Warm Up" },
+    { "durationSeconds": 240, "resistanceLevel": 10, "name": "Base" },
+    { "durationSeconds": 240, "resistanceLevel": 15, "name": "Climb 1" },
+    { "durationSeconds": 120, "resistanceLevel": 8, "name": "Recovery" },
+    { "durationSeconds": 240, "resistanceLevel": 20, "name": "Climb 2" },
+    { "durationSeconds": 120, "resistanceLevel": 8, "name": "Recovery" },
+    { "durationSeconds": 240, "resistanceLevel": 25, "name": "Summit Push" },
+    { "durationSeconds": 120, "resistanceLevel": 5, "name": "Cool Down" }
+  ]
+}

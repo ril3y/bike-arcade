@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +72,8 @@ fun PauseOverlay(
     onExit: () -> Unit,
     isGameMuted: Boolean = false,
     onToggleMute: () -> Unit = {},
+    gameVolume: Float = 1f,
+    onVolumeChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showPlayIcon by remember { mutableStateOf(false) }
@@ -256,6 +261,39 @@ fun PauseOverlay(
                             tint = Color(0xFFE53935),
                             alpha = pauseAlpha,
                             onClick = onExit,
+                        )
+                    }
+
+                    // Volume slider
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.widthIn(max = 280.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isGameMuted || gameVolume < 0.01f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = "Volume",
+                            tint = Color.White.copy(alpha = 0.6f * pauseAlpha),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = onToggleMute),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Slider(
+                            value = if (isGameMuted) 0f else gameVolume,
+                            onValueChange = onVolumeChange,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF4FC3F7).copy(alpha = pauseAlpha),
+                                activeTrackColor = Color(0xFF4FC3F7).copy(alpha = 0.6f * pauseAlpha),
+                                inactiveTrackColor = Color.White.copy(alpha = 0.1f * pauseAlpha),
+                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "${(gameVolume * 100).toInt()}%",
+                            color = Color.White.copy(alpha = 0.5f * pauseAlpha),
+                            fontSize = 11.sp,
                         )
                     }
 

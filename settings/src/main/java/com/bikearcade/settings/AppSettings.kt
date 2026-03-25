@@ -27,7 +27,7 @@ data class AppSettings(
         const val DEFAULT_SIDEBAR_WIDTH = 640
         const val DEFAULT_HUD_OPACITY = 0.85f
         const val DEFAULT_USE_METRIC = true
-        val DEFAULT_METRICS_SOURCE = MetricsSourceType.AIDL
+        val DEFAULT_METRICS_SOURCE = MetricsSourceType.SESSION
         const val DEFAULT_TCP_PORT = 9999
         const val DEFAULT_SMOOTHING_ALPHA = 0.3f
         const val DEFAULT_SCREEN_SAVER_TIMEOUT = 3
@@ -62,14 +62,11 @@ enum class ScreenSaverStyle(val displayName: String, val description: String) {
  * Supported sources for bike telemetry data.
  */
 enum class MetricsSourceType(val displayName: String) {
-    BLE("Bluetooth (FTMS)"),
-    TCP("TCP Serial Bridge"),
-    LOGCAT("Logcat (JRNY)"),
-    DIRECT("Direct UCB (kills JRNY)"),
-    AIDL("SerialBridge AIDL");
+    SESSION("VeloLauncher"),
+    BLE("Bluetooth (FTMS)");
 
     companion object {
         fun fromOrdinal(ordinal: Int): MetricsSourceType =
-            entries.getOrElse(ordinal) { AIDL }
+            entries.getOrElse(ordinal) { SESSION }
     }
 }

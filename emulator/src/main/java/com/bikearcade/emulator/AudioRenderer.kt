@@ -31,6 +31,10 @@ class AudioRenderer {
     @Volatile
     var isMuted: Boolean = false
 
+    /** Volume level 0.0 (silent) to 1.0 (full). Applied as linear gain on samples. */
+    @Volatile
+    var volume: Float = 1.0f
+
     fun start(requestedSampleRate: Int = 0) {
         if (started) return
         if (requestedSampleRate > 0) sampleRate = requestedSampleRate
@@ -106,6 +110,13 @@ class AudioRenderer {
                 offset += written
             }
             return
+        }
+        // Apply volume scaling if not full
+        val vol = volume
+        if (vol < 0.99f) {
+            for (i in 0 until count) {
+                samples[i] = (samples[i] * vol).toInt().toShort()
+            }
         }
         var offset = 0
         while (offset < count) {

@@ -19,6 +19,9 @@
     <!-- Kill JRNY to release single-client serial bridge (TCP:9999) -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
+    <!-- Read other apps' logcat for UCB workout data (non-invasive bike metrics) -->
+    <uses-permission android:name="android.permission.READ_LOGS" />
+
     <!-- ROM file access and save data -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -30,10 +33,21 @@
     <application
         android:name=".BikeArcadeApplication"
         android:allowBackup="false"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:appCategory="game"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="BikeArcade"
         android:supportsRtl="true"
         android:theme="@style/Theme.BikeArcade">
+
+        <!-- Custom categories readable by launchers via PackageManager.getApplicationInfo().metaData -->
+        <meta-data android:name="app.category.primary" android:value="fitness" />
+        <meta-data android:name="app.category.secondary" android:value="game" />
+
+        <!-- VeloLauncher workout app discovery -->
+        <meta-data android:name="io.freewheel.workout_app" android:value="true" />
+        <meta-data android:name="io.freewheel.workout_description"
+                   android:value="Retro arcade gaming with real-time bike resistance" />
 
         <activity
             android:name=".MainActivity"

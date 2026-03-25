@@ -3,6 +3,7 @@ package com.bikearcade.app
 import android.app.Application
 import android.content.Context
 import com.bikearcade.app.launcher.GameLibrary
+import com.bikearcade.app.launcher.GameMetadataDB
 import com.bikearcade.app.launcher.ThumbnailManager
 import com.bikearcade.emulator.AudioRenderer
 import com.bikearcade.emulator.EmulatorCore
@@ -11,6 +12,7 @@ import com.bikearcade.media.BikeArcadeMediaController
 import com.bikearcade.media.MediaSessionMonitor
 import com.bikearcade.metrics.BikeMetricsService
 import com.bikearcade.settings.SettingsRepository
+import com.bikearcade.settings.UserRepository
 
 class BikeArcadeApplication : Application() {
 
@@ -30,9 +32,11 @@ class BikeArcadeApplication : Application() {
 }
 
 class AppContainer(context: Context) {
+    val userRepository = UserRepository(context)
     val settingsRepository = SettingsRepository(context)
     val thumbnailManager = ThumbnailManager(context)
-    val gameLibrary = GameLibrary(context, thumbnailManager)
+    val metadataDB = GameMetadataDB(java.io.File("/storage/emulated/0/BikeArcade/metadata"))
+    val gameLibrary = GameLibrary(context, thumbnailManager, metadataDB)
     val bikeMetricsService = BikeMetricsService(context)
     val mediaSessionMonitor = MediaSessionMonitor(context)
     val mediaController = BikeArcadeMediaController(context)

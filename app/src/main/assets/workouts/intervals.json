@@ -1,0 +1,21 @@
+{
+  "id": "intervals",
+  "name": "Intervals",
+  "description": "20 min high/low alternating for max calorie burn.",
+  "segments": [
+    { "durationSeconds": 180, "resistanceLevel": 5, "name": "Warm Up" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 1" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 2" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 3" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 4" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 5" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 60, "resistanceLevel": 25, "name": "Sprint 6" },
+    { "durationSeconds": 90, "resistanceLevel": 5, "name": "Recover" },
+    { "durationSeconds": 120, "resistanceLevel": 3, "name": "Cool Down" }
+  ]
+}

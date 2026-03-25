@@ -1,5 +1,7 @@
 package com.bikearcade.overlay.components
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,12 +24,15 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bikearcade.media.MediaInfo
@@ -40,8 +46,7 @@ import com.bikearcade.ui.theme.TextPrimary
 import com.bikearcade.ui.theme.TextSecondary
 
 /**
- * Now Playing card showing current track info with media controls.
- * Track name uses marquee scrolling if too long.
+ * Now Playing card with album art, track info, progress bar, and media controls.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -55,31 +60,15 @@ fun NowPlayingCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                color = SurfaceBright,
-                shape = MaterialTheme.shapes.large,
-            )
-            .border(
-                width = 1.dp,
-                color = SurfaceBorder,
-                shape = MaterialTheme.shapes.large,
-            )
-            .padding(16.dp),
+            .background(SurfaceBright, MaterialTheme.shapes.large)
+            .border(1.dp, SurfaceBorder, MaterialTheme.shapes.large)
+            .padding(10.dp),
     ) {
-        // Section header
-        Text(
-            text = "NOW PLAYING",
-            style = MaterialTheme.typography.titleMedium,
-            color = NeonAccent,
-        )
-
-        Spacer(Modifier.height(12.dp))
-
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            // Album art placeholder
+            // Album art — show real bitmap if available
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -87,21 +76,31 @@ fun NowPlayingCard(
                     .background(SurfaceBorder),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Default.Album,
-                    contentDescription = "Album art",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(32.dp),
-                )
+                val art = mediaInfo.albumArt
+                if (art != null) {
+                    Image(
+                        bitmap = art.asImageBitmap(),
+                        contentDescription = "Album art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Album,
+                        contentDescription = "Album art",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
-            // Track info
+            // Track info + controls
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = mediaInfo.trackName.ifBlank { "No track" },
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -111,9 +110,6 @@ fun NowPlayingCard(
                         Modifier
                     },
                 )
-
-                Spacer(Modifier.height(2.dp))
-
                 Text(
                     text = mediaInfo.artistName.ifBlank { "Unknown artist" },
                     style = MaterialTheme.typography.bodySmall,
@@ -121,40 +117,61 @@ fun NowPlayingCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+
+                // Progress bar
+                if (mediaInfo.duration > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = mediaInfo.positionFormatted,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        LinearProgressIndicator(
+                            progress = { mediaInfo.progress },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(2.dp)
+                                .padding(horizontal = 6.dp),
+                            color = NeonAccent,
+                            trackColor = SurfaceBorder,
+                        )
+                        Text(
+                            text = mediaInfo.durationFormatted,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                    }
+                }
             }
-        }
 
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.width(4.dp))
 
-        // Media controls
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+            // Media controls
             ArcadeIconButton(
                 icon = Icons.Default.SkipPrevious,
-                contentDescription = "Previous track",
+                contentDescription = "Previous",
                 onClick = onSkipPrevious,
                 iconTint = MediaActive,
+                size = 32.dp,
+                iconSize = 18.dp,
             )
-
-            Spacer(Modifier.width(16.dp))
-
             ArcadeIconButtonLarge(
                 icon = if (mediaInfo.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (mediaInfo.isPlaying) "Pause" else "Play",
                 onClick = onPlayPause,
                 iconTint = NeonAccent,
             )
-
-            Spacer(Modifier.width(16.dp))
-
             ArcadeIconButton(
                 icon = Icons.Default.SkipNext,
-                contentDescription = "Next track",
+                contentDescription = "Next",
                 onClick = onSkipNext,
                 iconTint = MediaActive,
+                size = 32.dp,
+                iconSize = 18.dp,
             )
         }
     }

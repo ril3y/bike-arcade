@@ -14,7 +14,7 @@ import java.net.URLEncoder
  *
  * URL format: https://thumbnails.libretro.com/{System}/Named_Boxarts/{GameName}.png
  *
- * Thumbnails are cached locally in /storage/emulated/0/BikeArcade/thumbnails/{system}/
+ * Thumbnails are cached locally in /storage/emulated/0/BikeArcade/thumbnails/{platformId}/
  */
 class ThumbnailManager(private val context: Context) {
 
@@ -25,40 +25,24 @@ class ThumbnailManager(private val context: Context) {
         private const val BASE_URL = "https://thumbnails.libretro.com"
         private const val CONNECT_TIMEOUT = 5000
         private const val READ_TIMEOUT = 10000
-
-        private val SYSTEM_NAMES = mapOf(
-            ConsoleType.NES to "Nintendo - Nintendo Entertainment System",
-            ConsoleType.SNES to "Nintendo - Super Nintendo Entertainment System",
-        )
     }
 
-    /**
-     * Get the local cached thumbnail path for a game, or null if not cached.
-     */
     fun getCachedThumbnail(entry: GameEntry): File? {
         val file = thumbnailFileFor(entry)
         return if (file.exists() && file.length() > 0) file else null
     }
 
-    /**
-     * Download the thumbnail for a game entry if not already cached.
-     * Returns the local file path on success, null on failure.
-     */
     suspend fun fetchThumbnail(entry: GameEntry): File? = withContext(Dispatchers.IO) {
         val localFile = thumbnailFileFor(entry)
         if (localFile.exists() && localFile.length() > 0) {
             return@withContext localFile
         }
 
-        // Mark as attempted even if it fails (create empty marker to avoid retrying)
         val markerFile = File(localFile.parentFile, "${localFile.nameWithoutExtension}.notfound")
-
-        // Skip if we already know it's not found
         if (markerFile.exists()) return@withContext null
 
-        val systemName = SYSTEM_NAMES[entry.consoleType] ?: return@withContext null
+        val systemName = entry.platform?.thumbnailSystem ?: return@withContext null
 
-        // Try the ROM name as-is first, then with common No-Intro naming patterns
         val namesToTry = buildNameVariants(entry.name)
 
         for (name in namesToTry) {
@@ -95,50 +79,56 @@ class ThumbnailManager(private val context: Context) {
             }
         }
 
-        // Mark as not found so we don't retry
         markerFile.parentFile?.mkdirs()
         markerFile.createNewFile()
         Log.d(TAG, "No thumbnail found for ${entry.name}")
         null
     }
 
-    /**
-     * Build name variants to try against the libretro thumbnail server.
-     * The server uses No-Intro naming convention which includes region tags.
-     */
     private fun buildNameVariants(cleanName: String): List<String> {
-        val variants = mutableListOf<String>()
+        val baseNames = mutableListOf(cleanName)
 
-        // The clean name as-is (already stripped of tags by GameLibrary)
-        variants.add(cleanName)
+        // Try Roman numeral → Arabic numeral conversion (II→2, III→3, IV→4, etc.)
+        val romanConverted = convertRomanNumerals(cleanName)
+        if (romanConverted != cleanName) baseNames.add(romanConverted)
 
-        // With common region tags added back
-        variants.add("$cleanName (USA)")
-        variants.add("$cleanName (USA, Europe)")
-        variants.add("$cleanName (Europe)")
-        variants.add("$cleanName (Japan, USA)")
-        variants.add("$cleanName (World)")
-
-        // Replace ampersand variants
-        if ("&" in cleanName) {
-            val altName = cleanName.replace("&", "and")
-            variants.add("$altName (USA)")
-        }
+        // Try & ↔ and swaps
+        if ("&" in cleanName) baseNames.add(cleanName.replace("&", "and"))
         if (" and " in cleanName.lowercase()) {
-            val altName = cleanName.replace(Regex("\\band\\b", RegexOption.IGNORE_CASE), "&")
-            variants.add("$altName (USA)")
+            baseNames.add(cleanName.replace(Regex("\\band\\b", RegexOption.IGNORE_CASE), "&"))
         }
 
-        return variants
+        val regions = listOf("(USA)", "(USA, Europe)", "(Europe)", "(Japan, USA)", "(World)")
+        val variants = mutableListOf<String>()
+        for (base in baseNames.distinct()) {
+            variants.add(base)
+            for (region in regions) {
+                variants.add("$base $region")
+            }
+        }
+
+        return variants.distinct()
+    }
+
+    private val ROMAN_MAP = listOf(
+        "VIII" to "8", "VII" to "7", "VI" to "6",
+        "IV" to "4", "IX" to "9",
+        "XIII" to "13", "XII" to "12", "XI" to "11",
+        "III" to "3", "II" to "2",
+        "X" to "10", "V" to "5",
+    )
+
+    private fun convertRomanNumerals(name: String): String {
+        var result = name
+        for ((roman, arabic) in ROMAN_MAP) {
+            // Match Roman numeral as a whole word (word boundary)
+            result = result.replace(Regex("\\b$roman\\b"), arabic)
+        }
+        return result
     }
 
     private fun thumbnailFileFor(entry: GameEntry): File {
-        val systemDir = when (entry.consoleType) {
-            ConsoleType.NES -> "nes"
-            ConsoleType.SNES -> "snes"
-        }
-        // Sanitize name for filesystem
         val safeName = entry.name.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-        return File(File(cacheDir, systemDir), "$safeName.png")
+        return File(File(cacheDir, entry.platformId), "$safeName.png")
     }
 }

@@ -65,7 +65,7 @@ fun RideStatsBar(
                 color = SurfaceBorder,
                 shape = MaterialTheme.shapes.medium,
             )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -112,7 +112,7 @@ private fun StatItem(
 
         Text(
             text = value,
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.titleLarge,
             color = TextPrimary,
             textAlign = TextAlign.Center,
         )

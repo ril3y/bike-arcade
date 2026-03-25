@@ -1,0 +1,22 @@
+{
+  "id": "power_pyramid",
+  "name": "Power Pyramid",
+  "description": "30 min pyramid intervals. Build up then back down.",
+  "segments": [
+    { "durationSeconds": 180, "resistanceLevel": 5, "name": "Warm Up" },
+    { "durationSeconds": 120, "resistanceLevel": 10, "name": "Level 1" },
+    { "durationSeconds": 120, "resistanceLevel": 15, "name": "Level 2" },
+    { "durationSeconds": 120, "resistanceLevel": 20, "name": "Level 3" },
+    { "durationSeconds": 180, "resistanceLevel": 25, "name": "Peak" },
+    { "durationSeconds": 120, "resistanceLevel": 20, "name": "Level 3" },
+    { "durationSeconds": 120, "resistanceLevel": 15, "name": "Level 2" },
+    { "durationSeconds": 120, "resistanceLevel": 10, "name": "Level 1" },
+    { "durationSeconds": 60, "resistanceLevel": 5, "name": "Recovery" },
+    { "durationSeconds": 120, "resistanceLevel": 10, "name": "Level 1" },
+    { "durationSeconds": 120, "resistanceLevel": 15, "name": "Level 2" },
+    { "durationSeconds": 120, "resistanceLevel": 20, "name": "Level 3" },
+    { "durationSeconds": 180, "resistanceLevel": 25, "name": "Peak" },
+    { "durationSeconds": 120, "resistanceLevel": 15, "name": "Descend" },
+    { "durationSeconds": 180, "resistanceLevel": 3, "name": "Cool Down" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "free_ride",
+  "name": "Free Ride",
+  "description": "30 min at your own pace. Low resistance.",
+  "segments": [
+    { "durationSeconds": 1800, "resistanceLevel": 5, "name": "Free Ride" }
+  ]
+}

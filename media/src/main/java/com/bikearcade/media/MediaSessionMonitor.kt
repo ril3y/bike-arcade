@@ -28,7 +28,8 @@ import kotlinx.coroutines.launch
  * notification listener access is not granted.
  */
 class MediaSessionMonitor(
-    private val context: Context
+    private val context: Context,
+    parentScope: CoroutineScope? = null
 ) {
     private val sessionManager: MediaSessionManager =
         context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
@@ -44,7 +45,8 @@ class MediaSessionMonitor(
     val hasListenerAccess: StateFlow<Boolean> = _hasListenerAccess.asStateFlow()
 
     private var isListening = false
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope = parentScope?.let { CoroutineScope(it.coroutineContext + Job(it.coroutineContext[Job])) }
+        ?: CoroutineScope(Dispatchers.Main + Job())
     private var pollingJob: Job? = null
     private var mediaBrowser: MediaBrowser? = null
 
