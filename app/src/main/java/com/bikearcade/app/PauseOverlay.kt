@@ -79,6 +79,7 @@ fun PauseOverlay(
     var showPlayIcon by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var selectedSlot by remember { mutableIntStateOf(0) }
+    var showExitConfirm by remember { mutableStateOf(false) }
     // Track which slots have files — refreshed each time pause is triggered
     var slotStates by remember { mutableStateOf(BooleanArray(5) { false }) }
 
@@ -260,7 +261,7 @@ fun PauseOverlay(
                             label = "Exit",
                             tint = Color(0xFFE53935),
                             alpha = pauseAlpha,
-                            onClick = onExit,
+                            onClick = { showExitConfirm = true },
                         )
                     }
 
@@ -316,6 +317,53 @@ fun PauseOverlay(
                     }
                 }
             }
+        }
+
+        // Exit confirmation dialog
+        if (showExitConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showExitConfirm = false },
+                containerColor = Color(0xFF1A1A2E),
+                titleContentColor = Color.White,
+                textContentColor = Color(0xFFB0B0B0),
+                title = { Text("Exit Game?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Your workout stats will be saved if you've been riding for at least 1 minute.")
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Tip: Save your game state first so you can continue later!",
+                            color = Color(0xFF4FC3F7),
+                            fontSize = 13.sp,
+                        )
+                    }
+                },
+                confirmButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Save & Exit button
+                        androidx.compose.material3.TextButton(onClick = {
+                            // Save to the currently selected slot, then exit
+                            onSaveState(selectedSlot)
+                            showExitConfirm = false
+                            onExit()
+                        }) {
+                            Text("Save & Exit", color = Color(0xFF4FC3F7), fontWeight = FontWeight.Bold)
+                        }
+                        // Exit without saving
+                        androidx.compose.material3.TextButton(onClick = {
+                            showExitConfirm = false
+                            onExit()
+                        }) {
+                            Text("Exit", color = Color(0xFFE53935))
+                        }
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showExitConfirm = false }) {
+                        Text("Cancel", color = Color(0xFF9E9E9E))
+                    }
+                },
+            )
         }
     }
 }
