@@ -6,6 +6,7 @@ import com.bikearcade.app.launcher.GameLibrary
 import com.bikearcade.app.launcher.GameMetadataDB
 import com.bikearcade.app.launcher.ThumbnailManager
 import com.bikearcade.emulator.AudioRenderer
+import com.bikearcade.emulator.CoreDownloader
 import com.bikearcade.emulator.EmulatorCore
 import com.bikearcade.emulator.InputManager
 import com.bikearcade.media.BikeArcadeMediaController
@@ -41,6 +42,7 @@ class AppContainer(context: Context) {
     val mediaSessionMonitor = MediaSessionMonitor(context)
     val mediaController = BikeArcadeMediaController(context)
     val emulatorCore = EmulatorCore(context)
+    val coreDownloader = CoreDownloader(context)
     val inputManager = InputManager()
     val audioRenderer = AudioRenderer()
 }

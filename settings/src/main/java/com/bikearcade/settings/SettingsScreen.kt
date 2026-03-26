@@ -22,13 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -42,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +58,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bikearcade.emulator.CoreDownloader
+import com.bikearcade.emulator.CoreInfo
+import kotlinx.coroutines.launch
 
 // Dark theme colors
 private val BackgroundDark = Color(0xFF0D0D1A)
@@ -270,6 +278,9 @@ fun SettingsScreen(
                         )
                     }
 
+                    // Emulator cores section
+                    CoreManagerSection()
+
                     // Controller section
                     SettingsCard(icon = Icons.Default.Bluetooth, title = "BLUETOOTH") {
                         BluetoothPairingPanel()
@@ -473,5 +484,146 @@ private fun SettingsToggle(
                 uncheckedThumbColor = TextSecondary,
             ),
         )
+    }
+}
+
+@Composable
+private fun CoreManagerSection() {
+    val context = LocalContext.current
+    val downloader = remember { CoreDownloader(context) }
+    val scope = rememberCoroutineScope()
+
+    val downloadingId by downloader.downloading.collectAsState()
+    val progress by downloader.downloadProgress.collectAsState()
+
+    // Track installed state; incremented after download/delete to force recomposition
+    var refreshKey by remember { mutableIntStateOf(0) }
+
+    SettingsCard(icon = Icons.Default.Memory, title = "MANAGE CORES") {
+        Text(
+            text = "Libretro emulator cores (GPL, downloaded on demand)",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+
+        CoreDownloader.AVAILABLE_CORES.forEach { core ->
+            @Suppress("UNUSED_EXPRESSION")
+            refreshKey // read to trigger recomposition
+
+            val installed = downloader.isInstalled(core)
+            val isDownloading = downloadingId == core.id
+
+            CoreRow(
+                core = core,
+                installed = installed,
+                isDownloading = isDownloading,
+                progress = if (isDownloading) progress else 0f,
+                onDownload = {
+                    scope.launch {
+                        downloader.downloadCore(core)
+                        refreshKey++
+                    }
+                },
+                onDelete = {
+                    downloader.deleteCore(core)
+                    refreshKey++
+                },
+            )
+
+            if (core != CoreDownloader.AVAILABLE_CORES.last()) {
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoreRow(
+    core: CoreInfo,
+    installed: Boolean,
+    isDownloading: Boolean,
+    progress: Float,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (installed) AccentGreen.copy(alpha = 0.05f) else Color.Transparent)
+            .border(
+                width = 1.dp,
+                color = if (installed) AccentGreen.copy(alpha = 0.3f) else CardBorder,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = core.name,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = if (installed) "Installed" else "Not installed",
+                    color = if (installed) AccentGreen else TextSecondary,
+                    fontSize = 11.sp,
+                )
+            }
+
+            if (isDownloading) {
+                // Show nothing — progress bar below handles it
+            } else if (installed) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete ${core.name}",
+                        tint = DangerRed,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onDownload,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = "Download ${core.name}",
+                        tint = AccentCyan,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+
+        if (isDownloading) {
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = AccentCyan,
+                trackColor = SurfaceDark,
+            )
+            Text(
+                text = "Downloading… ${(progress * 100).toInt()}%",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }

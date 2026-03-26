@@ -27,6 +27,9 @@ android {
 }
 
 dependencies {
+    // Sibling modules
+    implementation(project(":emulator"))
+
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
     implementation(composeBom)

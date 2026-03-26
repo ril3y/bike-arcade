@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bikearcade.app.launcher.GameEntry
+import com.bikearcade.emulator.CoreDownloader
+import com.bikearcade.emulator.CoreNotInstalledException
 import com.bikearcade.emulator.EmulatorThread
 import com.bikearcade.emulator.PlatformRegistry
 import com.bikearcade.metrics.BikeMetrics
@@ -127,6 +129,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isScreenSaverActive = MutableStateFlow(false)
     val isScreenSaverActive: StateFlow<Boolean> = _isScreenSaverActive.asStateFlow()
     private var idleTimerJob: Job? = null
+
+    // Core download prompt — set when a game launch fails due to missing core
+    data class CoreDownloadPrompt(
+        val exception: CoreNotInstalledException,
+        val pendingGame: GameEntry,
+    )
+    private val _coreDownloadPrompt = MutableStateFlow<CoreDownloadPrompt?>(null)
+    val coreDownloadPrompt: StateFlow<CoreDownloadPrompt?> = _coreDownloadPrompt.asStateFlow()
+
+    /** Download progress bridged from [CoreDownloader]. */
+    val coreDownloadProgress: StateFlow<Float> = container.coreDownloader.downloadProgress
+    val coreDownloading: StateFlow<String?> = container.coreDownloader.downloading
 
     // Emulator thread (created when game starts)
     private var emulatorThread: EmulatorThread? = null
@@ -258,10 +272,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 container.gameLibrary.recordLaunch(entry)
                 startWorkoutTimer()
                 _currentScreen.value = Screen.PLAYING
+            } catch (e: CoreNotInstalledException) {
+                android.util.Log.w("MainViewModel", "Core not installed: ${e.coreLibrary}")
+                _coreDownloadPrompt.value = CoreDownloadPrompt(
+                    exception = e,
+                    pendingGame = entry,
+                )
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "Failed to launch game", e)
             }
         }
+    }
+
+    /** User accepted the core download prompt — download and auto-launch. */
+    fun acceptCoreDownload() {
+        val prompt = _coreDownloadPrompt.value ?: return
+        val platform = prompt.exception.platform ?: return
+        val coreInfo = CoreDownloader.coreForPlatform(platform) ?: return
+        val pendingGame = prompt.pendingGame
+
+        viewModelScope.launch {
+            val success = container.coreDownloader.downloadCore(coreInfo)
+            _coreDownloadPrompt.value = null
+            if (success) {
+                launchGame(pendingGame)
+            }
+        }
+    }
+
+    /** User dismissed the core download prompt. */
+    fun dismissCoreDownload() {
+        _coreDownloadPrompt.value = null
     }
 
     fun stopGame() {

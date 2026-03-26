@@ -7,15 +7,27 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.bikearcade.emulator.CoreDownloader
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -173,6 +185,24 @@ fun BikeArcadeApp(
         }
     }
 
+    // Core download prompt dialog
+    val corePrompt by viewModel.coreDownloadPrompt.collectAsState()
+    val coreDownloading by viewModel.coreDownloading.collectAsState()
+    val coreProgress by viewModel.coreDownloadProgress.collectAsState()
+
+    corePrompt?.let { prompt ->
+        val platformName = prompt.exception.platform?.displayName ?: prompt.exception.coreLibrary
+        val isDownloading = coreDownloading != null
+
+        CoreDownloadDialog(
+            platformName = platformName,
+            isDownloading = isDownloading,
+            progress = coreProgress,
+            onConfirm = { viewModel.acceptCoreDownload() },
+            onDismiss = { viewModel.dismissCoreDownload() },
+        )
+    }
+
     // Screen saver overlay (rendered on top via z-ordering)
     val isScreenSaverActive by viewModel.isScreenSaverActive.collectAsState()
     val currentSettings by viewModel.settings.collectAsState()
@@ -182,4 +212,49 @@ fun BikeArcadeApp(
             onDismiss = { viewModel.dismissScreenSaver() },
         )
     }
+}
+
+@Composable
+private fun CoreDownloadDialog(
+    platformName: String,
+    isDownloading: Boolean,
+    progress: Float,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isDownloading) onDismiss() },
+        title = { Text("Core Not Installed") },
+        text = {
+            Column {
+                if (isDownloading) {
+                    Text("Downloading $platformName core…")
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text("${(progress * 100).toInt()}%")
+                } else {
+                    Text("$platformName core is not installed. Download now? (~5 MB)")
+                }
+            }
+        },
+        confirmButton = {
+            if (!isDownloading) {
+                TextButton(onClick = onConfirm) {
+                    Text("Download")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(if (isDownloading) "Cancel" else "No")
+            }
+        },
+    )
 }
