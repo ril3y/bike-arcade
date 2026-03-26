@@ -140,6 +140,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _coreDownloadPrompt = MutableStateFlow<CoreDownloadPrompt?>(null)
     val coreDownloadPrompt: StateFlow<CoreDownloadPrompt?> = _coreDownloadPrompt.asStateFlow()
 
+    // Ride summary intent — Activity observes and launches (so finish() returns here)
+    private val _pendingSummaryIntent = MutableStateFlow<Intent?>(null)
+    val pendingSummaryIntent: StateFlow<Intent?> = _pendingSummaryIntent.asStateFlow()
+    fun clearPendingSummary() { _pendingSummaryIntent.value = null }
+
     /** Download progress bridged from [CoreDownloader]. */
     val coreDownloadProgress: StateFlow<Float> = container.coreDownloader.downloadProgress
     val coreDownloading: StateFlow<String?> = container.coreDownloader.downloading
@@ -371,7 +376,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             else -> "BikeArcade"
         }
 
-        val summaryIntent = Intent("io.freewheel.launcher.SHOW_RIDE_SUMMARY").apply {
+        _pendingSummaryIntent.value = Intent("io.freewheel.launcher.SHOW_RIDE_SUMMARY").apply {
             putExtra("durationSeconds", elapsed)
             putExtra("calories", stats.totalCalories.toInt())
             putExtra("avgPower", avgPower)
@@ -382,12 +387,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             putExtra("avgSpeedMph", currentMetrics.avgSpeed.toFloat())
             putExtra("distanceMiles", currentMetrics.distance.toFloat())
             putExtra("workoutName", workoutName)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        try {
-            app.startActivity(summaryIntent)
-        } catch (_: Exception) {
-            // VeloLauncher not installed — skip summary
+            // No FLAG_ACTIVITY_NEW_TASK — launched from Activity context so finish() returns here
         }
     }
 

@@ -203,6 +203,19 @@ fun BikeArcadeApp(
         )
     }
 
+    // Ride summary — launch from Activity context so finish() returns here
+    val pendingSummary by viewModel.pendingSummaryIntent.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(pendingSummary) {
+        pendingSummary?.let { intent ->
+            viewModel.clearPendingSummary()
+            try {
+                activity?.startActivity(intent)
+            } catch (_: Exception) {
+                // Launcher not installed — skip
+            }
+        }
+    }
+
     // Screen saver overlay (rendered on top via z-ordering)
     val isScreenSaverActive by viewModel.isScreenSaverActive.collectAsState()
     val currentSettings by viewModel.settings.collectAsState()
