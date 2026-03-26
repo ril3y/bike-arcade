@@ -1,6 +1,7 @@
 package com.bikearcade.app
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bikearcade.app.launcher.GameEntry
@@ -34,6 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val container = app.container
     private val fitnessClient = VeloFitnessClient(application)
     private var rideStartTime = 0L
+    private var currentGameName: String? = null
 
     // Navigation state
     enum class Screen { SPLASH, USER_SETUP, WORKOUT_SELECT, INTENSITY_PICK, LAUNCHER, PLAYING, SETTINGS }
@@ -270,6 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 thread.start()
 
                 container.gameLibrary.recordLaunch(entry)
+                currentGameName = entry.name
                 startWorkoutTimer()
                 _currentScreen.value = Screen.PLAYING
             } catch (e: CoreNotInstalledException) {
@@ -308,11 +311,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopGame() {
         container.bikeMetricsService.getSessionSource()?.requestStop()
         logRide()
+        showRideSummary()
         stopWorkoutTimer()
         emulatorThread?.stop()
         emulatorThread = null
         container.audioRenderer.stop()
         container.emulatorCore.unloadGame()
+        currentGameName = null
         _currentScreen.value = Screen.WORKOUT_SELECT
     }
 
@@ -345,6 +350,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val uri = fitnessClient.logRide(builder.build())
         android.util.Log.i("MainViewModel", "Ride logged: ${elapsed}s, avgPower=${avgPower}W → $uri")
+    }
+
+    private fun showRideSummary() {
+        val elapsed = _workoutElapsedSeconds.value
+        if (elapsed < 60) return // same threshold as logRide — skip short rides
+
+        val powerHistory = workoutPowerBuffer.toList()
+        val avgPower = if (powerHistory.isNotEmpty()) powerHistory.average().toInt() else 0
+        val maxPower = powerHistory.maxOrNull() ?: 0
+        val stats = container.bikeMetricsService.getProcessor().sessionStats
+        val currentMetrics = _bikeMetrics.value
+        val workout = _activeWorkout.value
+
+        val gameName = currentGameName
+        val workoutName = when {
+            workout != null && gameName != null -> "${workout.name} — $gameName"
+            workout != null -> workout.name
+            gameName != null -> "BikeArcade — $gameName"
+            else -> "BikeArcade"
+        }
+
+        val summaryIntent = Intent("io.freewheel.launcher.SHOW_RIDE_SUMMARY").apply {
+            putExtra("durationSeconds", elapsed)
+            putExtra("calories", stats.totalCalories.toInt())
+            putExtra("avgPower", avgPower)
+            putExtra("maxPower", maxPower)
+            putExtra("avgRpm", stats.avgCadence.toInt())
+            putExtra("avgResistance", currentMetrics.resistance)
+            putExtra("avgHeartRate", stats.avgHeartRate)
+            putExtra("avgSpeedMph", currentMetrics.avgSpeed.toFloat())
+            putExtra("distanceMiles", currentMetrics.distance.toFloat())
+            putExtra("workoutName", workoutName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            app.startActivity(summaryIntent)
+        } catch (_: Exception) {
+            // VeloLauncher not installed — skip summary
+        }
     }
 
     fun pauseEmulation() {
